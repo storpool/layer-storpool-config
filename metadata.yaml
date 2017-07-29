@@ -1,0 +1,9 @@
+name: storpool-config
+summary: Install the storpool-config package and generate storpool.conf
+maintainer: StorPool <support@storpool.com>
+description: |
+  FIXME: write something about this.
+  This charm installs a Debian package and writes out a file and stuff.
+requires:
+  repo:
+    interface: storpool-repo

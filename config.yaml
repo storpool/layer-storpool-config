@@ -1,0 +1,4 @@
+options:
+  storpool_conf:
+    type: string
+    description: The contents of the /etc/storpool.conf file.
