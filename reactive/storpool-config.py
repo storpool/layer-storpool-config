@@ -54,18 +54,21 @@ def config_changed():
 
 @reactive.when('storpool-repo-add.available')
 @reactive.when_not('storpool-config.config-available')
+@reactive.when_not('storpool-config.stopping')
 def not_ready_no_config():
 	rdebug('well, it seems we have a repo, but we do not have a config yet')
 	hookenv.status_set('maintenance', 'waiting for the StorPool charm configuration')
 
 @reactive.when_not('storpool-repo-add.available')
 @reactive.when('storpool-config.config-available')
+@reactive.when_not('storpool-config.stopping')
 def not_ready_no_repo():
 	rdebug('well, it seems we have a config, but we do not have a repo yet')
 	hookenv.status_set('maintenance', 'waiting for the StorPool repo setup')
 
 @reactive.when('storpool-repo-add.available', 'storpool-config.config-available', 'storpool-config.package-try-install')
 @reactive.when_not('storpool-config.package-installed')
+@reactive.when_not('storpool-config.stopping')
 def install_package():
 	rdebug('the repo hook has become available and we do have the configuration')
 	hookenv.status_set('maintenance', 'installing the StorPool configuration packages')
@@ -92,6 +95,7 @@ def install_package():
 
 @reactive.when('storpool-config.config-available', 'storpool-config.package-installed')
 @reactive.when_not('storpool-config.config-written')
+@reactive.when_not('storpool-config.stopping')
 def write_out_config():
 	rdebug('about to write out the /etc/storpool.conf file')
 	hookenv.status_set('maintenance', 'updating the /etc/storpool.conf file')
@@ -120,6 +124,7 @@ def write_out_config():
 
 @reactive.when('storpool-config.config-written')
 @reactive.when_not('storpool-config.config-network')
+@reactive.when_not('storpool-config.stopping')
 def setup_interfaces():
 	ifdata = spcnetwork.read_interfaces(rdebug)
 	if ifdata is None:
@@ -183,13 +188,18 @@ def setup_interfaces():
 	reactive.set_state('storpool-config.config-network')
 	hookenv.status_set('maintenance', '')
 
-@reactive.hook('stop')
-def remove_leftovers():
-	rdebug('storpool-config.stop invoked')
+def reset_states():
+	rdebug('state reset requested')
 	reactive.remove_state('storpool-config.config-available')
 	reactive.remove_state('storpool-config.package-try-install')
 	reactive.remove_state('storpool-config.package-installed')
 	reactive.remove_state('storpool-config.config-written')
+
+@reactive.hook('stop')
+def remove_leftovers():
+	rdebug('storpool-config.stop invoked')
+	reactive.set_state('storpool-config.stopping')
+	reset_states()
 
 	rdebug('about to roll back any txn-installed files')
 	txn.rollback_if_needed()
