@@ -201,8 +201,28 @@ def remove_leftovers():
 	reactive.set_state('storpool-config.stopping')
 	reset_states()
 
+	rdebug('about to bring down any interfaces that we were using')
+	cfg = spconfig.get_dict()
+	ifaces = cfg['SP_IFACE'].split(',')
+	for iface in ifaces:
+		rdebug('bringing {iface} down'.format(iface=iface))
+		subprocess.call(['ifdown', iface])
+		if iface.find('.') != -1:
+			parent = iface.split('.', 1)[0]
+			rdebug('also bringing {iface} down'.format(iface=parent))
+			subprocess.call(['ifdown', parent])
+
 	rdebug('about to roll back any txn-installed files')
 	txn.rollback_if_needed()
+
+	rdebug('about to try to bring up any interfaces that we just brought down')
+	for iface in ifaces:
+		if iface.find('.') != -1:
+			parent = iface.split('.', 1)[0]
+			rdebug('first bringing {iface} up'.format(iface=parent))
+			subprocess.call(['ifup', parent])
+		rdebug('bringing {iface} up'.format(iface=iface))
+		subprocess.call(['ifup', iface])
 
 	rdebug('about to uninstall any packages that we have installed')
 	sprepo.uninstall_recorded_packages()
