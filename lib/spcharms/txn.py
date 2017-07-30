@@ -18,6 +18,5 @@ def list_modules():
 		return modules.split('\n')
 
 def rollback_if_needed():
-	have_ours = module_name() in modules
 	if module_name() in list_modules():
 		subprocess.call(['txn', 'rollback', module_name()])
