@@ -12,6 +12,9 @@ from charms import reactive
 from charms.reactive import helpers as rhelpers
 from charmhelpers.core import hookenv
 
+from spcharms import repo as sprepo
+from spcharms import txn
+
 def rdebug(s):
 	with open('/tmp/storpool-charms.log', 'a') as f:
 		print('{tm} [config] {s}'.format(tm=time.ctime(), s=s), file=f)
@@ -43,22 +46,22 @@ def config_changed():
 	reactive.remove_state('storpool-config.package-installed')
 	reactive.set_state('storpool-config.package-try-install')
 
-@reactive.when('repo.available')
+@reactive.when('storpool-repo-add.available')
 @reactive.when_not('storpool-config.config-available')
-def not_ready_no_config(repo):
-	rdebug('well, it seems we have a repo link, but we do not have a config yet')
+def not_ready_no_config():
+	rdebug('well, it seems we have a repo, but we do not have a config yet')
 
-@reactive.when_not('repo.available')
+@reactive.when_not('storpool-repo-add.available')
 @reactive.when('storpool-config.config-available')
 def not_ready_no_repo():
-	rdebug('well, it seems we have a config, but we do not have a repo link yet')
+	rdebug('well, it seems we have a config, but we do not have a repo yet')
 
-@reactive.when('repo.available', 'storpool-config.config-available', 'storpool-config.package-try-install')
+@reactive.when('storpool-repo-add.available', 'storpool-config.config-available', 'storpool-config.package-try-install')
 @reactive.when_not('storpool-config.package-installed')
-def install_package(repo):
+def install_package():
 	rdebug('the repo hook has become available and we do have the configuration')
 	reactive.remove_state('storpool-config.package-try-install')
-	(err, newly_installed) = repo.install_packages({
+	(err, newly_installed) = sprepo.install_packages({
 		'txn-install': '*',
 		'storpool-config': '16.02.25.744ebef-1ubuntu1',
 	})
@@ -70,8 +73,7 @@ def install_package(repo):
 
 	if newly_installed:
 		rdebug('it seems we managed to install some packages: {names}'.format(names=newly_installed))
-		with open('/var/lib/storpool-config.packages', 'a') as f:
-			print('\n'.join(newly_installed), file=f)
+		sprepo.record_packages(newly_installed)
 	else:
 		rdebug('it seems that all the packages were installed already')
 
@@ -93,13 +95,11 @@ def write_out_config():
 		    },
 		)
 		rdebug('about to invoke txn install')
-		subprocess.check_call(['env', 'TXN_INSTALL_MODULE=storpool-config', 'txn', 'install', '-c', '-o', 'root', '-g', 'root', '-m', '600', '--', spconf.name, '/etc/storpool.conf'])
+		txn.install('-o', 'root', '-g', 'root', '-m', '600', '--', spconf.name, '/etc/storpool.conf')
 		rdebug('it seems that /etc/storpool.conf has been created')
 
 	rdebug('setting the config-written state')
 	reactive.set_state('storpool-config.config-written')
-	rdebug('removing the config-announced state')
-	reactive.remove_state('storpool-config.config-announced')
 
 @reactive.hook('stop')
 def remove_leftovers():
@@ -109,35 +109,10 @@ def remove_leftovers():
 	reactive.remove_state('storpool-config.package-installed')
 	reactive.remove_state('storpool-config.config-written')
 
-	modules_b = subprocess.getoutput('txn list-modules')
-	if modules_b is not None:
-		rdebug('got some txn list-modules output')
-		modules = modules_b.split('\n')
-		rdebug('modules: {mod}'.format(mod=modules))
-		have_config = 'storpool-config' in modules
-		rdebug('have_config: {have}'.format(have=have_config))
-		if have_config:
-			rdebug('invoking txn rollback storpool-config')
-			subprocess.call(['txn', 'rollback', 'storpool-config'])
-	else:
-		rdebug('looks like txn list-modules did not return anything meaningful')
+	rdebug('about to roll back any txn-installed files')
+	txn.rollback_if_needed()
 
-	rdebug('let us see if we installed any packages')
-	try:
-		rdebug('about to open the packages file')
-		with open('/var/lib/storpool-config.packages', 'r') as f:
-			names = list(filter(lambda s: len(s) > 0, map(lambda d: d.rstrip(), f.readlines())))
-			if names:
-				rdebug('about to remove some packages: {names}'.format(names=names))
-				cmd = ['apt-get', 'remove', '-y', '--'];
-				cmd.extend(names)
-				subprocess.call(cmd)
-			else:
-				rdebug('it looks like we did not install any packages')
-
-		rdebug('about to remove the packages file')
-		os.remove('/var/lib/storpool-config.packages', 'r')
-	except Exception as e:
-		rdebug('could not check for storpool-config.packages: {e}'.format(e=e))
+	rdebug('about to uninstall any packages that we have installed')
+	sprepo.uninstall_recorded_packages()
 
 	rdebug('goodbye, weird world!')
