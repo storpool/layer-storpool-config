@@ -201,30 +201,70 @@ def remove_leftovers():
 	reactive.set_state('storpool-config.stopping')
 	reset_states()
 
-	rdebug('about to bring down any interfaces that we were using')
-	cfg = spconfig.get_dict()
-	ifaces = cfg['SP_IFACE'].split(',')
-	for iface in ifaces:
-		rdebug('bringing {iface} down'.format(iface=iface))
-		subprocess.call(['ifdown', iface])
-		if iface.find('.') != -1:
-			parent = iface.split('.', 1)[0]
-			rdebug('also bringing {iface} down'.format(iface=parent))
-			subprocess.call(['ifdown', parent])
+	try:
+		rdebug('about to bring any interfaces that we were using down')
+		cfg = spconfig.get_dict()
+		ifaces = cfg['SP_IFACE'].split(',')
+		for iface in ifaces:
+			rdebug('bringing {iface} down'.format(iface=iface))
+			subprocess.call(['ifdown', iface])
+			if iface.find('.') != -1:
+				parent = iface.split('.', 1)[0]
+				rdebug('also bringing {iface} down'.format(iface=parent))
+				subprocess.call(['ifdown', parent])
+	except Exception as e:
+		rdebug('Could not bring the interfaces down: {e}'.format(e=e))
 
-	rdebug('about to roll back any txn-installed files')
-	txn.rollback_if_needed()
+	try:
+		rdebug('about to roll back any txn-installed files')
+		txn.rollback_if_needed()
+	except Exception as e:
+		rdebug('Could not run txn rollback: {e}'.format(e=e))
 
-	rdebug('about to try to bring up any interfaces that we just brought down')
-	for iface in ifaces:
-		if iface.find('.') != -1:
-			parent = iface.split('.', 1)[0]
-			rdebug('first bringing {iface} up'.format(iface=parent))
-			subprocess.call(['ifup', parent])
-		rdebug('bringing {iface} up'.format(iface=iface))
-		subprocess.call(['ifup', iface])
+	try:
+		rdebug('about to try to bring any interfaces that we just brought down back up')
+		for iface in ifaces:
+			if iface.find('.') != -1:
+				parent = iface.split('.', 1)[0]
+				rdebug('first bringing {iface} up'.format(iface=parent))
+				subprocess.call(['ifup', parent])
+			rdebug('bringing {iface} up'.format(iface=iface))
+			subprocess.call(['ifup', iface])
+	except Exception as e:
+		rdebug('Could not bring the interfaces up: {e}'.format(e=e))
 
-	rdebug('about to uninstall any packages that we have installed')
-	sprepo.uninstall_recorded_packages()
+	try:
+		rdebug('about to uninstall any packages that we have installed')
+		sprepo.uninstall_recorded_packages()
+	except Exception as e:
+		rdebug('Could not uninstall packages: {e}'.format(e=e))
+	
+	try:
+		rdebug('about to remove any loaded kernel modules')
+
+		mods_b = subprocess.check_output(['lsmod'])
+		for module_data in mods_b.decode().split('\n'):
+			module = module_data.split(' ', 1)[0]
+			rdebug('- got module {mod}'.format(mod=module))
+			if module.startswith('storpool_'):
+				rdebug('  - trying to remove it')
+				subprocess.call(['rmmod', module])
+
+		# Any remaining? (not an error, just, well...)
+		rdebug('checking for any remaining StorPool modules')
+		remaining = []
+		mods_b = subprocess.check_output(['lsmod'])
+		for module_data in mods_b.decode().split('\n'):
+			module = module_data.split(' ', 1)[0]
+			if module.startswith('storpool_'):
+				remaining.append(module)
+		if remaining:
+			rdebug('some modules were left over: {lst}'.format(lst=' '.join(sorted(remaining))))
+		else:
+			rdebug('looks like we got rid of them all!')
+
+		rdebug('that is all for the modules')
+	except Exception as e:
+		rdebug('Could not remove kernel modules: {e}'.format(e=e))
 
 	rdebug('goodbye, weird world!')
