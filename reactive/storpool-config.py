@@ -202,6 +202,20 @@ def remove_leftovers():
 	reset_states()
 
 	try:
+		rdebug('about to run "txn rollback" in all the containers')
+		for lxd in txn.LXD.construct_all():
+			if lxd.prefix == '':
+				continue
+			if not os.path.exists(lxd.prefix + '/var/lib/txn/txn.index'):
+				rdebug('- no txn.index in the {name} container, skipping'.format(name=lxd.name))
+				continue
+			rdebug('- about to run "txn rollback" in {name}'.format(name=lxd.name))
+			res = lxd.exec_with_output(['txn', '--', 'rollback', txn.module_name()])
+			rdebug('  - txn rollback completed: {res}'.format(res=res))
+	except Exception as e:
+		rdebug('Could not run "txn rollback" in all the containers: {e}'.format(e=e))
+
+	try:
 		rdebug('about to bring any interfaces that we were using down')
 		cfg = spconfig.get_dict()
 		ifaces = cfg['SP_IFACE'].split(',')
