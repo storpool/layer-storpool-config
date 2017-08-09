@@ -58,7 +58,9 @@ class LXD(object):
 		self.txn = Txn(prefix=self.prefix)
 
 	def exec_with_output(self, cmd):
-		p = subprocess.Popen(['lxc', 'exec', self.name, '--'] + cmd, stdout=subprocess.PIPE)
+		if self.name != '':
+			cmd = ['lxc', 'exec', self.name, '--'] + cmd
+		p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
 		output = p.communicate()[0].decode()
 		res = p.returncode
 		return { 'res': res, 'out': output, }
