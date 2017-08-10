@@ -2,3 +2,6 @@ options:
   storpool_conf:
     type: string
     description: The contents of the /etc/storpool.conf file.
+  storpool_version:
+    type: string
+    description: The version of the StorPool Ubuntu packages to install.
