@@ -92,7 +92,7 @@ def install_package():
 
 	if newly_installed:
 		rdebug('it seems we managed to install some packages: {names}'.format(names=newly_installed))
-		sprepo.record_packages(newly_installed)
+		sprepo.record_packages('storpool-config', newly_installed)
 	else:
 		rdebug('it seems that all the packages were installed already')
 
@@ -282,6 +282,9 @@ def remove_leftovers():
 		rdebug('that is all for the modules')
 	except Exception as e:
 		rdebug('Could not remove kernel modules: {e}'.format(e=e))
+
+	rdebug('removing any config-related packages')
+	sprepo.unrecord_packages('storpool-config')
 
 	rdebug('let the storpool-repo layer know that we are shutting down')
 	reactive.set_state('storpool-repo-add.stop')
