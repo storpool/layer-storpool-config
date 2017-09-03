@@ -16,10 +16,10 @@ from spcharms import config as spconfig
 from spcharms.confighelpers import network as spcnetwork
 from spcharms import repo as sprepo
 from spcharms import txn
+from spcharms import utils as sputils
 
 def rdebug(s):
-	with open('/tmp/storpool-charms.log', 'a') as f:
-		print('{tm} [config] {s}'.format(tm=time.ctime(), s=s), file=f)
+	sputils.rdebug(s, prefix='config')
 
 @reactive.hook('config-changed')
 def config_changed():
