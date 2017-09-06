@@ -133,6 +133,11 @@ def write_out_config():
 @reactive.when_not('l-storpool-config.config-network')
 @reactive.when_not('l-storpool-config.stopped')
 def setup_interfaces():
+	if sputils.check_in_lxc():
+		rdebug('running in an LXC container, not setting up interfaces')
+		reactive.set_state('l-storpool-config.config-network')
+		return
+
 	ifdata = spcnetwork.read_interfaces(rdebug)
 	if ifdata is None:
 		return
@@ -209,33 +214,34 @@ def remove_leftovers():
 	reactive.remove_state('l-storpool-config.stop')
 	reset_states()
 
-	try:
-		rdebug('about to run "txn rollback" in all the containers')
-		for lxd in txn.LXD.construct_all():
-			if lxd.prefix == '':
-				continue
-			if not os.path.exists(lxd.prefix + '/var/lib/txn/txn.index'):
-				rdebug('- no txn.index in the {name} container, skipping'.format(name=lxd.name))
-				continue
-			rdebug('- about to run "txn rollback" in {name}'.format(name=lxd.name))
-			res = lxd.exec_with_output(['txn', '--', 'rollback', txn.module_name()])
-			rdebug('  - txn rollback completed: {res}'.format(res=res))
-	except Exception as e:
-		rdebug('Could not run "txn rollback" in all the containers: {e}'.format(e=e))
+	if not sputils.check_in_lxc():
+		try:
+			rdebug('about to run "txn rollback" in all the containers')
+			for lxd in txn.LXD.construct_all():
+				if lxd.prefix == '':
+					continue
+				if not os.path.exists(lxd.prefix + '/var/lib/txn/txn.index'):
+					rdebug('- no txn.index in the {name} container, skipping'.format(name=lxd.name))
+					continue
+				rdebug('- about to run "txn rollback" in {name}'.format(name=lxd.name))
+				res = lxd.exec_with_output(['txn', '--', 'rollback', txn.module_name()])
+				rdebug('  - txn rollback completed: {res}'.format(res=res))
+		except Exception as e:
+			rdebug('Could not run "txn rollback" in all the containers: {e}'.format(e=e))
 
-	try:
-		rdebug('about to bring any interfaces that we were using down')
-		cfg = spconfig.get_dict()
-		ifaces = cfg['SP_IFACE'].split(',')
-		for iface in ifaces:
-			rdebug('bringing {iface} down'.format(iface=iface))
-			subprocess.call(['ifdown', iface])
-			if iface.find('.') != -1:
-				parent = iface.split('.', 1)[0]
-				rdebug('also bringing {iface} down'.format(iface=parent))
-				subprocess.call(['ifdown', parent])
-	except Exception as e:
-		rdebug('Could not bring the interfaces down: {e}'.format(e=e))
+		try:
+			rdebug('about to bring any interfaces that we were using down')
+			cfg = spconfig.get_dict()
+			ifaces = cfg['SP_IFACE'].split(',')
+			for iface in ifaces:
+				rdebug('bringing {iface} down'.format(iface=iface))
+				subprocess.call(['ifdown', iface])
+				if iface.find('.') != -1:
+					parent = iface.split('.', 1)[0]
+					rdebug('also bringing {iface} down'.format(iface=parent))
+					subprocess.call(['ifdown', parent])
+		except Exception as e:
+			rdebug('Could not bring the interfaces down: {e}'.format(e=e))
 
 	try:
 		rdebug('about to roll back any txn-installed files')
@@ -243,45 +249,46 @@ def remove_leftovers():
 	except Exception as e:
 		rdebug('Could not run txn rollback: {e}'.format(e=e))
 
-	try:
-		rdebug('about to try to bring any interfaces that we just brought down back up')
-		for iface in ifaces:
-			if iface.find('.') != -1:
-				parent = iface.split('.', 1)[0]
-				rdebug('first bringing {iface} up'.format(iface=parent))
-				subprocess.call(['ifup', parent])
-			rdebug('bringing {iface} up'.format(iface=iface))
-			subprocess.call(['ifup', iface])
-	except Exception as e:
-		rdebug('Could not bring the interfaces up: {e}'.format(e=e))
+	if not sputils.check_in_lxc():
+		try:
+			rdebug('about to try to bring any interfaces that we just brought down back up')
+			for iface in ifaces:
+				if iface.find('.') != -1:
+					parent = iface.split('.', 1)[0]
+					rdebug('first bringing {iface} up'.format(iface=parent))
+					subprocess.call(['ifup', parent])
+				rdebug('bringing {iface} up'.format(iface=iface))
+				subprocess.call(['ifup', iface])
+		except Exception as e:
+			rdebug('Could not bring the interfaces up: {e}'.format(e=e))
 
-	try:
-		rdebug('about to remove any loaded kernel modules')
+		try:
+			rdebug('about to remove any loaded kernel modules')
 
-		mods_b = subprocess.check_output(['lsmod'])
-		for module_data in mods_b.decode().split('\n'):
-			module = module_data.split(' ', 1)[0]
-			rdebug('- got module {mod}'.format(mod=module))
-			if module.startswith('storpool_'):
-				rdebug('  - trying to remove it')
-				subprocess.call(['rmmod', module])
+			mods_b = subprocess.check_output(['lsmod'])
+			for module_data in mods_b.decode().split('\n'):
+				module = module_data.split(' ', 1)[0]
+				rdebug('- got module {mod}'.format(mod=module))
+				if module.startswith('storpool_'):
+					rdebug('  - trying to remove it')
+					subprocess.call(['rmmod', module])
 
-		# Any remaining? (not an error, just, well...)
-		rdebug('checking for any remaining StorPool modules')
-		remaining = []
-		mods_b = subprocess.check_output(['lsmod'])
-		for module_data in mods_b.decode().split('\n'):
-			module = module_data.split(' ', 1)[0]
-			if module.startswith('storpool_'):
-				remaining.append(module)
-		if remaining:
-			rdebug('some modules were left over: {lst}'.format(lst=' '.join(sorted(remaining))))
-		else:
-			rdebug('looks like we got rid of them all!')
+			# Any remaining? (not an error, just, well...)
+			rdebug('checking for any remaining StorPool modules')
+			remaining = []
+			mods_b = subprocess.check_output(['lsmod'])
+			for module_data in mods_b.decode().split('\n'):
+				module = module_data.split(' ', 1)[0]
+				if module.startswith('storpool_'):
+					remaining.append(module)
+			if remaining:
+				rdebug('some modules were left over: {lst}'.format(lst=' '.join(sorted(remaining))))
+			else:
+				rdebug('looks like we got rid of them all!')
 
-		rdebug('that is all for the modules')
-	except Exception as e:
-		rdebug('Could not remove kernel modules: {e}'.format(e=e))
+			rdebug('that is all for the modules')
+		except Exception as e:
+			rdebug('Could not remove kernel modules: {e}'.format(e=e))
 
 	rdebug('removing any config-related packages')
 	sprepo.unrecord_packages('storpool-config')
