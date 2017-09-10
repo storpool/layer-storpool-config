@@ -129,6 +129,10 @@ def write_out_config():
 	reactive.set_state('l-storpool-config.config-written')
 	hookenv.status_set('maintenance', '')
 
+def handle_interfaces():
+	cfg = spconfig.get_dict()
+	return cfg.get('SP_IFACE_NETWORKS', '') != ''
+
 @reactive.when('l-storpool-config.config-written')
 @reactive.when_not('l-storpool-config.config-network')
 @reactive.when_not('l-storpool-config.stopped')
@@ -151,6 +155,12 @@ def setup_interfaces():
 		hookenv.set('error', 'No SP_IFACES in the StorPool config')
 		return
 	rdebug('got interfaces: {ifaces}'.format(ifaces=ifaces))
+	if not handle_interfaces():
+		rdebug('no SP_IFACE_NETWORKS definition, not setting up or bringing any interfaces up or down')
+		reactive.set_state('l-storpool-config.config-network')
+		hookenv.status_set('maintenance', '')
+		return
+
 	for iface in ifaces.split(','):
 		if len(iface) < 1:
 			continue
@@ -214,6 +224,8 @@ def remove_leftovers():
 	reactive.remove_state('l-storpool-config.stop')
 	reset_states()
 
+	do_handle_interfaces = handle_interfaces()
+
 	if not sputils.check_in_lxc():
 		try:
 			rdebug('about to run "txn rollback" in all the containers')
@@ -229,19 +241,20 @@ def remove_leftovers():
 		except Exception as e:
 			rdebug('Could not run "txn rollback" in all the containers: {e}'.format(e=e))
 
-		try:
-			rdebug('about to bring any interfaces that we were using down')
-			cfg = spconfig.get_dict()
-			ifaces = cfg['SP_IFACE'].split(',')
-			for iface in ifaces:
-				rdebug('bringing {iface} down'.format(iface=iface))
-				subprocess.call(['ifdown', iface])
-				if iface.find('.') != -1:
-					parent = iface.split('.', 1)[0]
-					rdebug('also bringing {iface} down'.format(iface=parent))
-					subprocess.call(['ifdown', parent])
-		except Exception as e:
-			rdebug('Could not bring the interfaces down: {e}'.format(e=e))
+		if do_handle_interfaces:
+			try:
+				rdebug('about to bring any interfaces that we were using down')
+				cfg = spconfig.get_dict()
+				ifaces = cfg['SP_IFACE'].split(',')
+				for iface in ifaces:
+					rdebug('bringing {iface} down'.format(iface=iface))
+					subprocess.call(['ifdown', iface])
+					if iface.find('.') != -1:
+						parent = iface.split('.', 1)[0]
+						rdebug('also bringing {iface} down'.format(iface=parent))
+						subprocess.call(['ifdown', parent])
+			except Exception as e:
+				rdebug('Could not bring the interfaces down: {e}'.format(e=e))
 
 	try:
 		rdebug('about to roll back any txn-installed files')
@@ -250,17 +263,18 @@ def remove_leftovers():
 		rdebug('Could not run txn rollback: {e}'.format(e=e))
 
 	if not sputils.check_in_lxc():
-		try:
-			rdebug('about to try to bring any interfaces that we just brought down back up')
-			for iface in ifaces:
-				if iface.find('.') != -1:
-					parent = iface.split('.', 1)[0]
-					rdebug('first bringing {iface} up'.format(iface=parent))
-					subprocess.call(['ifup', parent])
-				rdebug('bringing {iface} up'.format(iface=iface))
-				subprocess.call(['ifup', iface])
-		except Exception as e:
-			rdebug('Could not bring the interfaces up: {e}'.format(e=e))
+		if do_handle_interfaces:
+			try:
+				rdebug('about to try to bring any interfaces that we just brought down back up')
+				for iface in ifaces:
+					if iface.find('.') != -1:
+						parent = iface.split('.', 1)[0]
+						rdebug('first bringing {iface} up'.format(iface=parent))
+						subprocess.call(['ifup', parent])
+					rdebug('bringing {iface} up'.format(iface=iface))
+					subprocess.call(['ifup', iface])
+			except Exception as e:
+				rdebug('Could not bring the interfaces up: {e}'.format(e=e))
 
 		try:
 			rdebug('about to remove any loaded kernel modules')
