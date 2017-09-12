@@ -184,6 +184,7 @@ def setup_interfaces():
 		with tempfile.NamedTemporaryFile(dir='/tmp', mode='w+t', delete=True) as spifaces:
 			rdebug('about to write the new interfaces configuration to the temporary file {sp}'.format(sp=spifaces.name))
 			spcnetwork.write_interfaces(ifdata, spifaces.name, rdebug)
+			spifaces.flush()
 			rdebug('about to invoke txn install')
 			txn.install('-o', 'root', '-g', 'root', '-m', '644', '--', spifaces.name, '/etc/network/interfaces')
 			rdebug('it seems that /etc/network/interfaces has been updated')
