@@ -1,3 +1,7 @@
+"""
+A StorPool Juju charm helper module for parsing and updating the Ubuntu
+network interface configuration if needed.
+"""
 import re
 
 from charmhelpers.core import hookenv
@@ -6,6 +10,9 @@ from spcharms import config as spconfig
 
 
 def read_interfaces(rdebug):
+    """
+    Parse the /etc/network/interfaces file.
+    """
     rdebug('trying to parse the system interface configuration')
     hookenv.status_set('maintenance',
                        'parsing the system interface configuration')
@@ -136,6 +143,10 @@ def read_interfaces(rdebug):
 
 
 def get_spiface_network(iface):
+    """
+    Get the IPv4 network for the specified interface from
+    the StorPool configuration.
+    """
     cfg = spconfig.get_dict()
     nets = dict(map(
         lambda s: s.split('=', 1),
@@ -160,6 +171,9 @@ nonvlandef = {
 
 
 def build_interface_lines(iface, data):
+    """
+    Rebuild an interface definition.
+    """
     res = 'iface ' + iface + ' inet static\n'
     for var in sorted(data.keys()):
         value = data[var]
@@ -171,6 +185,9 @@ def build_interface_lines(iface, data):
 
 
 def build_vlan_data(iface, parent, cfg):
+    """
+    Build a VLAN interface definition.
+    """
     data = {
         'address': get_spiface_network(iface) + cfg['SP_OURID'],
         'netmask': '255.255.255.0',
@@ -185,6 +202,9 @@ def build_vlan_data(iface, parent, cfg):
 
 
 def build_nonvlan_data(iface, cfg):
+    """
+    Build a non-VLAN interface definition.
+    """
     data = {
         'address': get_spiface_network(iface) + cfg['SP_OURID'],
         'netmask': '255.255.255.0',
@@ -198,6 +218,11 @@ def build_nonvlan_data(iface, cfg):
 
 
 def update_interface_if_needed(ifdata, iface, rdebug):
+    """
+    Update a network interface configuration if it is listed in the StorPool
+    configuration file with a specific IPv4 network and the current system
+    configuration does not match that.
+    """
     rdebug('updating the {iface} interface if needed'.format(iface=iface))
     cfg = spconfig.get_dict()
     if iface.find('.') != -1:
@@ -265,6 +290,9 @@ def update_interface_if_needed(ifdata, iface, rdebug):
 
 
 def add_interface(ifdata, iface, rdebug):
+    """
+    Update the system network configuration if needed.
+    """
     rdebug('adding interface {iface}'.format(iface=iface))
     cfg = spconfig.get_dict()
 
@@ -304,6 +332,9 @@ def add_interface(ifdata, iface, rdebug):
 
 
 def write_interfaces(ifdata, fname, rdebug):
+    """
+    Write out the system network configuration if needed.
+    """
     rdebug('writing out the interface definitions to {fname}'
            .format(fname=fname))
     with open(fname, 'w') as f:

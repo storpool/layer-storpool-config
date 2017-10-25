@@ -1,3 +1,6 @@
+"""
+A Juju layer for installing and configuring the base StorPool packages.
+"""
 from __future__ import print_function
 
 import pwd
@@ -20,11 +23,17 @@ from spcharms import utils as sputils
 
 
 def rdebug(s):
+    """
+    Pass the diagnostic message string `s` to the central diagnostic logger.
+    """
     sputils.rdebug(s, prefix='config')
 
 
 @reactive.hook('config-changed')
 def config_changed():
+    """
+    Check if the configuration is complete or has been changed.
+    """
     rdebug('config-changed happened')
     config = hookenv.config()
 
@@ -63,6 +72,9 @@ def config_changed():
 @reactive.when_not('l-storpool-config.config-available')
 @reactive.when_not('l-storpool-config.stopped')
 def not_ready_no_config():
+    """
+    Note that some configuration settings are missing.
+    """
     rdebug('well, it seems we have a repo, but we do not have a config yet')
     hookenv.status_set('maintenance',
                        'waiting for the StorPool charm configuration')
@@ -72,6 +84,9 @@ def not_ready_no_config():
 @reactive.when('l-storpool-config.config-available')
 @reactive.when_not('l-storpool-config.stopped')
 def not_ready_no_repo():
+    """
+    Note that the `storpool-repo` layer has not yet completed its work.
+    """
     rdebug('well, it seems we have a config, but we do not have a repo yet')
     hookenv.status_set('maintenance', 'waiting for the StorPool repo setup')
 
@@ -82,6 +97,9 @@ def not_ready_no_repo():
 @reactive.when_not('l-storpool-config.package-installed')
 @reactive.when_not('l-storpool-config.stopped')
 def install_package():
+    """
+    Install the base StorPool packages.
+    """
     rdebug('the repo hook has become available and '
            'we do have the configuration')
 
@@ -122,6 +140,9 @@ def install_package():
 @reactive.when_not('l-storpool-config.config-written')
 @reactive.when_not('l-storpool-config.stopped')
 def write_out_config():
+    """
+    Write out the StorPool configuration file specified in the charm config.
+    """
     rdebug('about to write out the /etc/storpool.conf file')
     hookenv.status_set('maintenance', 'updating the /etc/storpool.conf file')
     with tempfile.NamedTemporaryFile(dir='/tmp',
@@ -153,6 +174,9 @@ def write_out_config():
 
 
 def handle_interfaces():
+    """
+    Check whether any interfaces should be reconfigured.
+    """
     cfg = spconfig.get_dict()
     return cfg.get('SP_IFACE_NETWORKS', '') != ''
 
@@ -161,6 +185,9 @@ def handle_interfaces():
 @reactive.when_not('l-storpool-config.config-network')
 @reactive.when_not('l-storpool-config.stopped')
 def setup_interfaces():
+    """
+    Set up the IPv4 addresses of some interfaces if requested.
+    """
     if sputils.check_in_lxc():
         rdebug('running in an LXC container, not setting up interfaces')
         reactive.set_state('l-storpool-config.config-network')
@@ -246,6 +273,9 @@ def setup_interfaces():
 
 
 def reset_states():
+    """
+    Go through the whole install/configure cycle.
+    """
     rdebug('state reset requested')
     reactive.remove_state('l-storpool-config.config-available')
     reactive.remove_state('l-storpool-config.package-try-install')
@@ -256,6 +286,9 @@ def reset_states():
 @reactive.when('l-storpool-config.stop')
 @reactive.when_not('l-storpool-config.stopped')
 def remove_leftovers():
+    """
+    Clean up, remove configuration files, uninstall packages.
+    """
     rdebug('storpool-config.stop invoked')
     reactive.remove_state('l-storpool-config.stop')
     reset_states()
