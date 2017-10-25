@@ -60,6 +60,9 @@ def config_changed():
     reactive.remove_state('l-storpool-config.package-installed')
     reactive.set_state('l-storpool-config.package-try-install')
 
+    # And the network configuration, too...
+    reactive.remove_state('l-storpool-config.config-network')
+
     # This will probably race with some others, but oh well
     hookenv.status_set('maintenance',
                        'waiting for the StorPool charm configuration and '
@@ -209,6 +212,7 @@ def reset_states():
     reactive.remove_state('l-storpool-config.package-try-install')
     reactive.remove_state('l-storpool-config.package-installed')
     reactive.remove_state('l-storpool-config.config-written')
+    reactive.remove_state('l-storpool-config.config-network')
 
 
 @reactive.when('l-storpool-config.stop')
