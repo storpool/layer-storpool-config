@@ -7,13 +7,16 @@ from spcharms import config as spconfig
 
 def read_interfaces(rdebug):
     rdebug('trying to parse the system interface configuration')
-    hookenv.status_set('maintenance', 'parsing the system interface configuration')
+    hookenv.status_set('maintenance',
+                       'parsing the system interface configuration')
     blocks = []
     interfaces = {}
     re_i = {
         'auto': re.compile('\s* auto \s+ (?P<iface> \S+ ) \s* $', re.X),
         'empty': re.compile('\s* $', re.X),
-        'iface': re.compile('\s* iface \s+ (?P<iface> \S+ ) \s+ inet \s+ (?P<inet> \S+ ) $', re.X),
+        'iface': re.compile('\s* iface \s+ (?P<iface> \S+ ) \s+ '
+                            'inet \s+ (?P<inet> \S+ ) $',
+                            re.X),
         'ifprop': re.compile('\s* (?P<var> \S+ ) \s+ (?P<value> .* ) $', re.X),
         'source': re.compile('\s* source \s+ (?P<path> \S+ ) \s* $', re.X),
     }
@@ -38,8 +41,10 @@ def read_interfaces(rdebug):
                     'lines': nline,
                 }
                 if found is None:
-                    rdebug('Unexpected /etc/network/interfaces line: {line}'.format(line=line))
-                    hookenv.status_set('error', 'Could not parse /etc/network/interfaces: unexpected line: {line}'.format(line=line))
+                    msg = 'Could not parse /etc/network/interfaces: ' \
+                          'unexpected line: {line}'.format(line=line)
+                    rdebug(msg)
+                    hookenv.status_set('error', msg)
                     return
                 elif found == 'empty':
                     empty = empty + nline
@@ -63,8 +68,11 @@ def read_interfaces(rdebug):
                             'data': None,
                         }
                     if interfaces[data['iface']]['data'] is not None:
-                        rdebug('duplicate interface definition for {iface}'.format(iface=data['iface']))
-                        hookenv.status_set('error', 'Duplicate interface definition for {iface} in /etc/network/interfaces'.format(iface=data['iface']))
+                        msg = 'Duplicate interface definition for {iface} ' \
+                              'in /etc/network/interfaces' \
+                              .format(iface=data['iface'])
+                        rdebug(msg)
+                        hookenv.status_set('error', msg)
                         return
                     interfaces[data['iface']]['data'] = {}
                     iface = data['iface']
@@ -73,7 +81,8 @@ def read_interfaces(rdebug):
                     rdebug('FIXME: grrr, handle the {t} type!'.format(t=found))
             else:
                 if re_i['empty'].match(line):
-                    rdebug('done with the definition of the {iface} iface, it seems'.format(iface=iface))
+                    rdebug('done with the definition of the {iface} iface'
+                           .format(iface=iface))
                     blocks.append({
                         'type': 'iface',
                         'name': iface,
@@ -86,11 +95,15 @@ def read_interfaces(rdebug):
                     continue
                 m = re_i['ifprop'].match(line)
                 if not m:
-                    rdebug('invalid interface property line for the {iface} interface: {line}'.format(iface=iface, line=line))
-                    hookenv.status_set('error', 'invalid interface property line for the {iface} interface: {line}'.format(iface=iface, line=line))
+                    msg = 'invalid interface property line for ' \
+                          'the {iface} interface: {line}' \
+                          .format(iface=iface, line=line)
+                    rdebug(msg)
+                    hookenv.status_set('error', msg)
                     return
                 d = m.groupdict()
-                rdebug('got an interface property: "{var}": "{value}"'.format(var=d['var'], value=d['value']))
+                rdebug('got an interface property: "{var}": "{value}"'
+                       .format(var=d['var'], value=d['value']))
                 ifd = interfaces[iface]['data']
                 if d['var'].startswith('pre-') or d['var'].startswith('post-'):
                     if d['var'] not in ifd:
@@ -102,7 +115,8 @@ def read_interfaces(rdebug):
                 nonempty += nline
 
     if iface is not None:
-        rdebug('fallen off EOF with the definition of the {iface} iface, it seems'.format(iface=iface))
+        rdebug('fallen off EOF with the definition of the {iface} iface'
+               .format(iface=iface))
         blocks.append({
             'type': 'iface',
             'name': iface,
@@ -189,7 +203,8 @@ def update_interface_if_needed(ifdata, iface, rdebug):
     if iface.find('.') != -1:
         parent = iface.split('.', 1)[0]
         update_interface_if_needed(ifdata, parent, rdebug)
-        rdebug('back to updating the {iface} interface if needed'.format(iface=iface))
+        rdebug('back to updating the {iface} interface if needed'
+               .format(iface=iface))
 
         data = build_vlan_data(iface, parent, cfg)
     else:
@@ -226,12 +241,17 @@ def update_interface_if_needed(ifdata, iface, rdebug):
         for i in range(len(ifdata['blocks'])):
             bl = ifdata['blocks'][i]
             if bl['type'] == 'iface' and bl['name'] == iface:
-                bl['lines'] = build_interface_lines(iface, ifdata['interfaces'][iface]['data'])
-                rdebug('something changed, do we have the correct block for {iface}? {bl}'.format(iface=iface, bl=bl))
+                bl['lines'] = \
+                    build_interface_lines(iface,
+                                          ifdata['interfaces'][iface]['data'])
+                rdebug('something changed, do we have the correct block '
+                       'for {iface}? {bl}'.format(iface=iface, bl=bl))
                 idx = i
                 break
         if idx == -1:
-            raise Exception('storpool-config internal error: could not find a block defining the {iface} interface'.format(iface=iface))
+            raise Exception('storpool-config internal error: could not find '
+                            'a block defining the {iface} interface'
+                            .format(iface=iface))
         if not ifdata['interfaces'][iface]['auto']:
             ifdata['interfaces'][iface]['auto'] = True
             ifdata['blocks'].insert(idx, {
@@ -268,21 +288,24 @@ def add_interface(ifdata, iface, rdebug):
         'data': {'iface': iface},
         'lines': 'auto ' + iface + '\n',
     })
-    rdebug('whee, did we get the right auto data? {bl}'.format(bl=ifdata['blocks'][-1]))
+    rdebug('whee, did we get the right auto data? {bl}'
+           .format(bl=ifdata['blocks'][-1]))
     ifdata['blocks'].append({
         'type': 'iface',
         'empty': '',
         'data': data,
         'lines': build_interface_lines(iface, data),
     })
-    rdebug('whee, did we get the right data? {bl}'.format(bl=ifdata['blocks'][-1]))
+    rdebug('whee, did we get the right data? {bl}'
+           .format(bl=ifdata['blocks'][-1]))
 
     ifdata['changed'] = True
     ifdata['changed-interfaces'].add(iface)
 
 
 def write_interfaces(ifdata, fname, rdebug):
-    rdebug('writing out the interface definitions to {fname}'.format(fname=fname))
+    rdebug('writing out the interface definitions to {fname}'
+           .format(fname=fname))
     with open(fname, 'w') as f:
         for bl in ifdata['blocks']:
             print(bl['empty'], end='', file=f)

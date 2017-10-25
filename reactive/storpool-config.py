@@ -29,7 +29,8 @@ def config_changed():
     config = hookenv.config()
 
     spconf = config.get('storpool_conf', None)
-    rdebug('and we do{xnot} have a storpool_conf setting'.format(xnot=' not' if spconf is None else ''))
+    rdebug('and we do{xnot} have a storpool_conf setting'
+           .format(xnot=' not' if spconf is None else ''))
     if spconf is None:
         rdebug('removing the config-available state')
         reactive.remove_state('l-storpool-config.config-available')
@@ -37,7 +38,8 @@ def config_changed():
         reactive.remove_state('l-storpool-config.config-network')
         return
 
-    if not config.changed('storpool_conf') and rhelpers.is_state('l-storpool-config.package-installed'):
+    if not config.changed('storpool_conf') and \
+       rhelpers.is_state('l-storpool-config.package-installed'):
         rdebug('apparently the storpool_conf setting has not changed')
         return
 
@@ -52,7 +54,9 @@ def config_changed():
     reactive.set_state('l-storpool-config.package-try-install')
 
     # This will probably race with some others, but oh well
-    hookenv.status_set('maintenance', 'waiting for the StorPool charm configuration and the StorPool repo setup')
+    hookenv.status_set('maintenance',
+                       'waiting for the StorPool charm configuration and '
+                       'the StorPool repo setup')
 
 
 @reactive.when('storpool-repo-add.available')
@@ -60,7 +64,8 @@ def config_changed():
 @reactive.when_not('l-storpool-config.stopped')
 def not_ready_no_config():
     rdebug('well, it seems we have a repo, but we do not have a config yet')
-    hookenv.status_set('maintenance', 'waiting for the StorPool charm configuration')
+    hookenv.status_set('maintenance',
+                       'waiting for the StorPool charm configuration')
 
 
 @reactive.when_not('storpool-repo-add.available')
@@ -71,19 +76,24 @@ def not_ready_no_repo():
     hookenv.status_set('maintenance', 'waiting for the StorPool repo setup')
 
 
-@reactive.when('storpool-repo-add.available', 'l-storpool-config.config-available', 'l-storpool-config.package-try-install')
+@reactive.when('storpool-repo-add.available',
+               'l-storpool-config.config-available',
+               'l-storpool-config.package-try-install')
 @reactive.when_not('l-storpool-config.package-installed')
 @reactive.when_not('l-storpool-config.stopped')
 def install_package():
-    rdebug('the repo hook has become available and we do have the configuration')
+    rdebug('the repo hook has become available and '
+           'we do have the configuration')
 
-    hookenv.status_set('maintenance', 'obtaining the requested StorPool version')
+    hookenv.status_set('maintenance',
+                       'obtaining the requested StorPool version')
     spver = hookenv.config().get('storpool_version', None)
     if spver is None or spver == '':
         rdebug('no storpool_version key in the charm config yet')
         return
 
-    hookenv.status_set('maintenance', 'installing the StorPool configuration packages')
+    hookenv.status_set('maintenance',
+                       'installing the StorPool configuration packages')
     reactive.remove_state('l-storpool-config.package-try-install')
     (err, newly_installed) = sprepo.install_packages({
         'txn-install': '*',
@@ -96,7 +106,8 @@ def install_package():
         return
 
     if newly_installed:
-        rdebug('it seems we managed to install some packages: {names}'.format(names=newly_installed))
+        rdebug('it seems we managed to install some packages: {names}'
+               .format(names=newly_installed))
         sprepo.record_packages('storpool-config', newly_installed)
     else:
         rdebug('it seems that all the packages were installed already')
@@ -106,14 +117,18 @@ def install_package():
     hookenv.status_set('maintenance', '')
 
 
-@reactive.when('l-storpool-config.config-available', 'l-storpool-config.package-installed')
+@reactive.when('l-storpool-config.config-available',
+               'l-storpool-config.package-installed')
 @reactive.when_not('l-storpool-config.config-written')
 @reactive.when_not('l-storpool-config.stopped')
 def write_out_config():
     rdebug('about to write out the /etc/storpool.conf file')
     hookenv.status_set('maintenance', 'updating the /etc/storpool.conf file')
-    with tempfile.NamedTemporaryFile(dir='/tmp', mode='w+t', delete=True) as spconf:
-        rdebug('about to write the contents to the temporary file {sp}'.format(sp=spconf.name))
+    with tempfile.NamedTemporaryFile(dir='/tmp',
+                                     mode='w+t',
+                                     delete=True) as spconf:
+        rdebug('about to write the contents to the temporary file {sp}'
+               .format(sp=spconf.name))
         templating.render(source='storpool.conf',
                           target=spconf.name,
                           owner='root',
@@ -123,7 +138,8 @@ def write_out_config():
                           },
                           )
         rdebug('about to invoke txn install')
-        txn.install('-o', 'root', '-g', 'root', '-m', '644', '--', spconf.name, '/etc/storpool.conf')
+        txn.install('-o', 'root', '-g', 'root', '-m', '644', '--',
+                    spconf.name, '/etc/storpool.conf')
         rdebug('it seems that /etc/storpool.conf has been created')
 
         rdebug('trying to read it now')
@@ -153,10 +169,12 @@ def setup_interfaces():
     ifdata = spcnetwork.read_interfaces(rdebug)
     if ifdata is None:
         return
-    rdebug('lots of interface data: {ifaces}'.format(ifaces=ifdata['interfaces']))
+    rdebug('lots of interface data: {ifaces}'
+           .format(ifaces=ifdata['interfaces']))
 
     rdebug('trying to parse the StorPool interface configuration')
-    hookenv.status_set('maintenance', 'parsing the StorPool interface configuration')
+    hookenv.status_set('maintenance',
+                       'parsing the StorPool interface configuration')
     cfg = spconfig.get_dict()
     ifaces = cfg.get('SP_IFACE', None)
     if ifaces is None:
@@ -164,7 +182,8 @@ def setup_interfaces():
         return
     rdebug('got interfaces: {ifaces}'.format(ifaces=ifaces))
     if not handle_interfaces():
-        rdebug('no SP_IFACE_NETWORKS definition, not setting up or bringing any interfaces up or down')
+        rdebug('no SP_IFACE_NETWORKS definition, not setting up or '
+               'bringing any interfaces up or down')
         reactive.set_state('l-storpool-config.config-network')
         hookenv.status_set('maintenance', '')
         return
@@ -177,7 +196,8 @@ def setup_interfaces():
             spcnetwork.add_interface(ifdata, iface, rdebug)
         else:
             spcnetwork.update_interface_if_needed(ifdata, iface, rdebug)
-        rdebug('is it in now? {ifin}'.format(ifin=iface in ifdata['interfaces']))
+        rdebug('is it in now? {ifin}'
+               .format(ifin=iface in ifdata['interfaces']))
 
     if ifdata['changed']:
         changed_interfaces = sorted(ifdata['changed-interfaces'])
@@ -186,15 +206,20 @@ def setup_interfaces():
         for iface in reversed(changed_interfaces):
             if iface in handled:
                 continue
-            rdebug('trying to bring interface {iface} down'.format(iface=iface))
+            rdebug('trying to bring interface {iface} down'
+                   .format(iface=iface))
             subprocess.call(['ifdown', iface])
 
-        with tempfile.NamedTemporaryFile(dir='/tmp', mode='w+t', delete=True) as spifaces:
-            rdebug('about to write the new interfaces configuration to the temporary file {sp}'.format(sp=spifaces.name))
+        with tempfile.NamedTemporaryFile(dir='/tmp',
+                                         mode='w+t',
+                                         delete=True) as spifaces:
+            rdebug('about to write the new interfaces configuration to '
+                   'the temporary file {sp}'.format(sp=spifaces.name))
             spcnetwork.write_interfaces(ifdata, spifaces.name, rdebug)
             spifaces.flush()
             rdebug('about to invoke txn install')
-            txn.install('-o', 'root', '-g', 'root', '-m', '644', '--', spifaces.name, '/etc/network/interfaces')
+            txn.install('-o', 'root', '-g', 'root', '-m', '644', '--',
+                        spifaces.name, '/etc/network/interfaces')
             rdebug('it seems that /etc/network/interfaces has been updated')
 
         rdebug('trying to bring the changed interfaces up now')
@@ -244,13 +269,17 @@ def remove_leftovers():
                 if lxd.prefix == '':
                     continue
                 if not os.path.exists(lxd.prefix + '/var/lib/txn/txn.index'):
-                    rdebug('- no txn.index in the {name} container, skipping'.format(name=lxd.name))
+                    rdebug('- no txn.index in the {name} container, skipping'
+                           .format(name=lxd.name))
                     continue
-                rdebug('- about to run "txn rollback" in {name}'.format(name=lxd.name))
-                res = lxd.exec_with_output(['txn', '--', 'rollback', txn.module_name()])
+                rdebug('- about to run "txn rollback" in {name}'
+                       .format(name=lxd.name))
+                res = lxd.exec_with_output(['txn', '--', 'rollback',
+                                            txn.module_name()])
                 rdebug('  - txn rollback completed: {res}'.format(res=res))
         except Exception as e:
-            rdebug('Could not run "txn rollback" in all the containers: {e}'.format(e=e))
+            rdebug('Could not run "txn rollback" in all the containers: {e}'
+                   .format(e=e))
 
         if do_handle_interfaces:
             try:
@@ -262,7 +291,8 @@ def remove_leftovers():
                     subprocess.call(['ifdown', iface])
                     if iface.find('.') != -1:
                         parent = iface.split('.', 1)[0]
-                        rdebug('also bringing {iface} down'.format(iface=parent))
+                        rdebug('also bringing {iface} down'
+                               .format(iface=parent))
                         subprocess.call(['ifdown', parent])
             except Exception as e:
                 rdebug('Could not bring the interfaces down: {e}'.format(e=e))
@@ -276,11 +306,13 @@ def remove_leftovers():
     if not sputils.check_in_lxc():
         if do_handle_interfaces:
             try:
-                rdebug('about to try to bring any interfaces that we just brought down back up')
+                rdebug('about to try to bring any interfaces that '
+                       'we just brought down back up')
                 for iface in ifaces:
                     if iface.find('.') != -1:
                         parent = iface.split('.', 1)[0]
-                        rdebug('first bringing {iface} up'.format(iface=parent))
+                        rdebug('first bringing {iface} up'
+                               .format(iface=parent))
                         subprocess.call(['ifup', parent])
                     rdebug('bringing {iface} up'.format(iface=iface))
                     subprocess.call(['ifup', iface])
@@ -307,7 +339,8 @@ def remove_leftovers():
                 if module.startswith('storpool_'):
                     remaining.append(module)
             if remaining:
-                rdebug('some modules were left over: {lst}'.format(lst=' '.join(sorted(remaining))))
+                rdebug('some modules were left over: {lst}'
+                       .format(lst=' '.join(sorted(remaining))))
             else:
                 rdebug('looks like we got rid of them all!')
 
