@@ -3,10 +3,8 @@ A Juju layer for installing and configuring the base StorPool packages.
 """
 from __future__ import print_function
 
-import pwd
 import os
 import tempfile
-import time
 import subprocess
 
 from charmhelpers.core import templating
