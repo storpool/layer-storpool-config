@@ -291,7 +291,10 @@ def remove_leftovers():
     reactive.remove_state('l-storpool-config.stop')
     reset_states()
 
-    do_handle_interfaces = handle_interfaces()
+    try:
+        do_handle_interfaces = handle_interfaces()
+    except Exception:
+        do_handle_interfaces = False
 
     if not sputils.check_in_lxc():
         try:
