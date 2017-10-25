@@ -115,13 +115,13 @@ def write_out_config():
     with tempfile.NamedTemporaryFile(dir='/tmp', mode='w+t', delete=True) as spconf:
         rdebug('about to write the contents to the temporary file {sp}'.format(sp=spconf.name))
         templating.render(source='storpool.conf',
-            target=spconf.name,
-            owner='root',
-            perms=0o600,
-            context={
-            'storpool_conf': hookenv.config()['storpool_conf'],
-            },
-        )
+                          target=spconf.name,
+                          owner='root',
+                          perms=0o600,
+                          context={
+                           'storpool_conf': hookenv.config()['storpool_conf'],
+                          },
+                          )
         rdebug('about to invoke txn install')
         txn.install('-o', 'root', '-g', 'root', '-m', '644', '--', spconf.name, '/etc/storpool.conf')
         rdebug('it seems that /etc/storpool.conf has been created')
@@ -188,7 +188,7 @@ def setup_interfaces():
                 continue
             rdebug('trying to bring interface {iface} down'.format(iface=iface))
             subprocess.call(['ifdown', iface])
-                    
+
         with tempfile.NamedTemporaryFile(dir='/tmp', mode='w+t', delete=True) as spifaces:
             rdebug('about to write the new interfaces configuration to the temporary file {sp}'.format(sp=spifaces.name))
             spcnetwork.write_interfaces(ifdata, spifaces.name, rdebug)

@@ -113,7 +113,12 @@ def read_interfaces(rdebug):
         iface = None
 
     rdebug('done with the /etc/network/interfaces file')
-    return { 'blocks': blocks, 'interfaces': interfaces, 'changed': False, 'changed-interfaces': set(), }
+    return {
+            'blocks': blocks,
+            'interfaces': interfaces,
+            'changed': False,
+            'changed-interfaces': set(),
+           }
 
 
 def get_spiface_network(iface):
@@ -141,7 +146,7 @@ nonvlandef = {
 
 
 def build_interface_lines(iface, data):
-    res = 'iface ' + iface + ' inet static\n';
+    res = 'iface ' + iface + ' inet static\n'
     for var in sorted(data.keys()):
         value = data[var]
         if var.startswith('pre-') or var.startswith('post-'):
@@ -149,7 +154,7 @@ def build_interface_lines(iface, data):
         else:
             res += '  ' + var + ' ' + value + '\n'
     return res
-        
+
 
 def build_vlan_data(iface, parent, cfg):
     data = {
@@ -189,7 +194,7 @@ def update_interface_if_needed(ifdata, iface, rdebug):
         data = build_vlan_data(iface, parent, cfg)
     else:
         data = build_nonvlan_data(iface, cfg)
-        
+
     ifd = ifdata['interfaces'][iface]['data']
     changed = False
     for var in data:
@@ -210,7 +215,7 @@ def update_interface_if_needed(ifdata, iface, rdebug):
             if current != wanted:
                 ifd[var] = wanted
                 changed = True
-    
+
     if not ifdata['interfaces'][iface]['auto']:
         changed = True
 
