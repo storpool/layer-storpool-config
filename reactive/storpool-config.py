@@ -215,6 +215,15 @@ def reset_states():
     reactive.remove_state('l-storpool-config.config-network')
 
 
+@reactive.hook('upgrade-charm')
+def upgrade():
+    """
+    Go through the whole cycle on upgrade.
+    """
+    rdebug('upgrading the charm')
+    reset_states()
+
+
 @reactive.when('l-storpool-config.stop')
 @reactive.when_not('l-storpool-config.stopped')
 def remove_leftovers():
