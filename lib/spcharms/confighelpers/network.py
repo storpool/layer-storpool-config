@@ -2,342 +2,160 @@
 A StorPool Juju charm helper module for parsing and updating the Ubuntu
 network interface configuration if needed.
 """
-import re
+import glob
+import os
+import tempfile
 
-from charmhelpers.core import hookenv
+from spcharms import txn
+from spcharms import utils as sputils
 
-from spcharms import config as spconfig
+vlandef = [
+    'post-up /sbin/ip link set dev {IF_VLAN_RAW_DEVICE} mtu {MTU}',
+    'post-up /sbin/ip link set dev {IFACE} mtu {MTU}',
+]
+nonvlandef = [
+    'post-up /sbin/ip link set dev {IFACE} mtu {MTU}',
+    'post-up /sbin/ethtool -A {IFACE} autoneg off tx off rx on || true',
+    'post-up /sbin/ethtool -C {IFACE} rx-usecs 16 || true',
+    'post-up /sbin/ethtool -G {IFACE} rx 4096 tx 512 || true',
+]
 
 
-def read_interfaces(rdebug):
+def rdebug(s):
     """
-    Parse the /etc/network/interfaces file.
+    Pass the diagnostic message string `s` to the central diagnostic logger.
     """
-    rdebug('trying to parse the system interface configuration')
-    hookenv.status_set('maintenance',
-                       'parsing the system interface configuration')
-    blocks = []
-    interfaces = {}
-    re_i = {
-        'auto': re.compile('\s* auto \s+ (?P<iface> \S+ ) \s* $', re.X),
-        'empty': re.compile('\s* $', re.X),
-        'iface': re.compile('\s* iface \s+ (?P<iface> \S+ ) \s+ '
-                            'inet \s+ (?P<inet> \S+ ) $',
-                            re.X),
-        'ifprop': re.compile('\s* (?P<var> \S+ ) \s+ (?P<value> .* ) $', re.X),
-        'source': re.compile('\s* source \s+ (?P<path> \S+ ) \s* $', re.X),
-    }
-    with open('/etc/network/interfaces', 'r') as f:
-        iface = None
-        empty = ''
-        nonempty = ''
-        for nline in f.readlines():
-            line = nline.rstrip()
-            if iface is None:
-                found = None
-                for tp in ('auto', 'iface', 'source', 'empty'):
-                    m = re_i[tp].match(line)
-                    if m:
-                        found = tp
-                        data = m.groupdict()
-                        break
-                defblock = {
-                    'type': found,
-                    'empty': empty,
-                    'data': data,
-                    'lines': nline,
-                }
-                if found is None:
-                    msg = 'Could not parse /etc/network/interfaces: ' \
-                          'unexpected line: {line}'.format(line=line)
-                    rdebug(msg)
-                    hookenv.status_set('error', msg)
-                    return
-                elif found == 'empty':
-                    empty = empty + nline
-                elif found == 'source':
-                    blocks.append(defblock)
-                    empty = ''
-                elif found == 'auto':
-                    if data['iface'] in interfaces:
-                        interfaces[data['iface']]['auto'] = True
-                    else:
-                        interfaces[data['iface']] = {
-                            'auto': True,
-                            'data': None,
-                        }
-                    blocks.append(defblock)
-                    empty = ''
-                elif found == 'iface':
-                    if data['iface'] not in interfaces:
-                        interfaces[data['iface']] = {
-                            'auto': False,
-                            'data': None,
-                        }
-                    if interfaces[data['iface']]['data'] is not None:
-                        msg = 'Duplicate interface definition for {iface} ' \
-                              'in /etc/network/interfaces' \
-                              .format(iface=data['iface'])
-                        rdebug(msg)
-                        hookenv.status_set('error', msg)
-                        return
-                    interfaces[data['iface']]['data'] = {}
-                    iface = data['iface']
-                    nonempty = nline
-                else:
-                    rdebug('FIXME: grrr, handle the {t} type!'.format(t=found))
-            else:
-                if re_i['empty'].match(line):
-                    rdebug('done with the definition of the {iface} iface'
-                           .format(iface=iface))
-                    blocks.append({
-                        'type': 'iface',
-                        'name': iface,
-                        'empty': empty,
-                        'data': interfaces[iface]['data'],
-                        'lines': nonempty,
-                    })
-                    empty = nline
-                    iface = None
+    sputils.rdebug(s, prefix='config')
+
+
+def fixup_interfaces_file(fname, data, handled):
+    """
+    Read an /etc/network/interfaces-like file, look for the interfaces
+    listed in the `data` dictionary.  If any of them are found, check that
+    they have all of the lines defined in the dictionary; otherwise add
+    the missing lines.
+
+    If the file contains a "source" or "source-directory" directive, process
+    the specified files recursively.
+    """
+    if fname in handled:
+        return
+    rdebug('Trying to add interface data to {fname}'.format(fname=fname))
+    handled.add(fname)
+
+    def is_new_stanza(s):
+        """
+        Check if a line starting with the `s` word actually starts a new
+        stanza in an /etc/network/interfaces-like file.
+        """
+        if s in ('iface', 'mapping', 'auto', 'source', 'source-directory'):
+            return True
+        return s.startswith('allow-')
+
+    basedir = os.path.dirname(fname)
+    in_iface = ''
+    left = []
+    with open(fname, mode='r') as f:
+        with tempfile.NamedTemporaryFile(dir=basedir,
+                                         mode='w+t',
+                                         delete=True) as tempf:
+            updated = False
+
+            while True:
+                ln = f.readline()
+                if not ln:
+                    break
+                stripped = ln.strip()
+                words = stripped.split()
+                if not words:
+                    print(ln, file=tempf, end='')
                     continue
-                m = re_i['ifprop'].match(line)
-                if not m:
-                    msg = 'invalid interface property line for ' \
-                          'the {iface} interface: {line}' \
-                          .format(iface=iface, line=line)
-                    rdebug(msg)
-                    hookenv.status_set('error', msg)
-                    return
-                d = m.groupdict()
-                rdebug('got an interface property: "{var}": "{value}"'
-                       .format(var=d['var'], value=d['value']))
-                ifd = interfaces[iface]['data']
-                if d['var'].startswith('pre-') or d['var'].startswith('post-'):
-                    if d['var'] not in ifd:
-                        ifd[d['var']] = []
-                    ifd[d['var']].append(d['value'])
-                else:
-                    ifd[d['var']] = d['value']
 
-                nonempty += nline
+                if in_iface:
+                    if is_new_stanza(words[0]):
+                        for missing in left:
+                            print(missing, file=tempf)
+                            updated = True
+                        in_iface = False
+                    else:
+                        left = list(filter(lambda s: s != stripped, left))
 
-    if iface is not None:
-        rdebug('fallen off EOF with the definition of the {iface} iface'
-               .format(iface=iface))
-        blocks.append({
-            'type': 'iface',
-            'name': iface,
-            'empty': empty,
-            'data': interfaces[iface]['data'],
-            'lines': nonempty,
-        })
-        iface = None
+                print(ln, file=tempf, end='')
 
-    rdebug('done with the /etc/network/interfaces file')
-    return {
-            'blocks': blocks,
-            'interfaces': interfaces,
-            'changed': False,
-            'changed-interfaces': set(),
-           }
+                # A separate conditional, since we may fall through.
+                if not in_iface and len(words) > 1:
+                    if words[0] == 'iface' and words[1] in data:
+                        in_iface = words[1]
+                        left = data[in_iface]
+                    elif words[0] == 'source':
+                        for new_fname in filter(lambda s: os.path.isfile(s),
+                                                glob.glob(words[1])):
+                            fixup_interfaces_file(new_fname, data, handled)
+                    elif words[0] == 'source-directory':
+                        for new_fname in filter(lambda s: os.path.isfile(s),
+                                                glob.glob(words[1] + '/*')):
+                            fixup_interfaces_file(new_fname, data, handled)
+
+            if in_iface:
+                for missing in left:
+                    print(missing, file=tempf)
+                    updated = True
+
+            if updated:
+                rdebug('Updating {fname}'.format(fname=fname))
+                tempf.flush()
+                txn.install(tempf.name, fname, exact=True)
+            else:
+                rdebug('No need to update {fname}'.format(fname=fname))
+
+    rdebug('Done adding interface data to {fname}'.format(fname=fname))
 
 
-def get_spiface_network(iface):
+def fixup_interfaces(ifaces):
     """
-    Get the IPv4 network for the specified interface from
-    the StorPool configuration.
+    Modify the system network configuration to add the post-up commands to
+    the StorPool interfaces.
     """
-    cfg = spconfig.get_dict()
-    nets = dict(map(
-        lambda s: s.split('=', 1),
-        cfg['SP_IFACE_NETWORKS'].split(',')
-    ))
-    return nets[iface]
+    rdebug('fixup_interfaces invoked for {ifaces}'.format(ifaces=ifaces))
 
-vlandef = {
-    'post-up': [
-        '/sbin/ip link set dev ${IF_VLAN_RAW_DEVICE} mtu 9000',
-        '/sbin/ip link set dev ${IFACE} mtu 9000',
-    ],
-}
-nonvlandef = {
-    'post-up': [
-        '/sbin/ip link set dev ${IFACE} mtu 9000',
-        '/sbin/ethtool -A ${IFACE} autoneg off tx off rx on || true',
-        '/sbin/ethtool -C ${IFACE} rx-usecs 16 || true',
-        '/sbin/ethtool -G ${IFACE} rx 4096 tx 512 || true',
-    ],
-}
-
-
-def build_interface_lines(iface, data):
-    """
-    Rebuild an interface definition.
-    """
-    res = 'iface ' + iface + ' inet static\n'
-    for var in sorted(data.keys()):
-        value = data[var]
-        if var.startswith('pre-') or var.startswith('post-'):
-            res += ''.join(map(lambda v: '  ' + var + ' ' + v + '\n', value))
+    # Parse the interface names
+    data = {}
+    for iface_data in ifaces.split(','):
+        parts = iface_data.split('=', 1)
+        iface = parts[0]
+        if len(parts) == 2:
+            mtu = parts[1]
         else:
-            res += '  ' + var + ' ' + value + '\n'
-    return res
+            mtu = '9000'
 
-
-def build_vlan_data(iface, parent, cfg):
-    """
-    Build a VLAN interface definition.
-    """
-    data = {
-        'address': get_spiface_network(iface) + cfg['SP_OURID'],
-        'netmask': '255.255.255.0',
-        'mtu': '9000',
-        'vlan-raw-device': parent,
-    }
-
-    global vlandef
-    data.update(vlandef)
-
-    return data
-
-
-def build_nonvlan_data(iface, cfg):
-    """
-    Build a non-VLAN interface definition.
-    """
-    data = {
-        'address': get_spiface_network(iface) + cfg['SP_OURID'],
-        'netmask': '255.255.255.0',
-        'mtu': '9000',
-    }
-
-    global nonvlandef
-    data.update(nonvlandef)
-
-    return data
-
-
-def update_interface_if_needed(ifdata, iface, rdebug):
-    """
-    Update a network interface configuration if it is listed in the StorPool
-    configuration file with a specific IPv4 network and the current system
-    configuration does not match that.
-    """
-    rdebug('updating the {iface} interface if needed'.format(iface=iface))
-    cfg = spconfig.get_dict()
-    if iface.find('.') != -1:
-        parent = iface.split('.', 1)[0]
-        update_interface_if_needed(ifdata, parent, rdebug)
-        rdebug('back to updating the {iface} interface if needed'
-               .format(iface=iface))
-
-        data = build_vlan_data(iface, parent, cfg)
-    else:
-        data = build_nonvlan_data(iface, cfg)
-
-    ifd = ifdata['interfaces'][iface]['data']
-    changed = False
-    for var in data:
-        wanted = data[var]
-
-        if var not in ifd:
-            ifd[var] = wanted
-            changed = True
-            continue
-        current = ifd[var]
-
-        if var.startswith('pre-') or var.startswith('post-'):
-            for line in wanted:
-                if line not in current:
-                    current.append(line)
-                    changed = True
+        parts = iface.split('.', 1)
+        if len(parts) == 2:
+            vlan = True
+            parent = parts[0]
         else:
-            if current != wanted:
-                ifd[var] = wanted
-                changed = True
+            vlan = False
+            parent = ''
 
-    if not ifdata['interfaces'][iface]['auto']:
-        changed = True
+        if vlan:
+            subst = {
+                'IFACE': iface,
+                'MTU': mtu,
+                'IF_VLAN_RAW_DEVICE': parent,
+            }
+            data[iface] = list(map(lambda s: s.format(**subst), vlandef))
+            subst = {
+                'IFACE': parent,
+                'MTU': mtu,
+            }
+            data[parent] = list(map(lambda s: s.format(**subst), nonvlandef))
+        else:
+            subst = {
+                'IFACE': iface,
+                'MTU': mtu,
+            }
+            data[iface] = list(map(lambda s: s.format(**subst), nonvlandef))
 
-    if changed:
-        ifdata['changed'] = True
-        ifdata['changed-interfaces'].add(iface)
-        idx = -1
-        for i in range(len(ifdata['blocks'])):
-            bl = ifdata['blocks'][i]
-            if bl['type'] == 'iface' and bl['name'] == iface:
-                bl['lines'] = \
-                    build_interface_lines(iface,
-                                          ifdata['interfaces'][iface]['data'])
-                rdebug('something changed, do we have the correct block '
-                       'for {iface}? {bl}'.format(iface=iface, bl=bl))
-                idx = i
-                break
-        if idx == -1:
-            raise Exception('storpool-config internal error: could not find '
-                            'a block defining the {iface} interface'
-                            .format(iface=iface))
-        if not ifdata['interfaces'][iface]['auto']:
-            ifdata['interfaces'][iface]['auto'] = True
-            ifdata['blocks'].insert(idx, {
-                'type': 'auto',
-                'empty': '\n',
-                'data': {'iface': iface},
-                'lines': 'auto ' + iface + '\n',
-            })
-    else:
-        rdebug('nothing seems to have changed for {iface}'.format(iface=iface))
+    rdebug('Gone through the interfaces, got data: {data}'.format(data=data))
 
-
-def add_interface(ifdata, iface, rdebug):
-    """
-    Update the system network configuration if needed.
-    """
-    rdebug('adding interface {iface}'.format(iface=iface))
-    cfg = spconfig.get_dict()
-
-    if iface.find('.') != -1:
-        parent = iface.split('.', 1)[0]
-        update_interface_if_needed(ifdata, parent, rdebug)
-
-        rdebug('back to adding interface {iface}'.format(iface=iface))
-        data = build_vlan_data(iface, parent, cfg)
-    else:
-        data = build_nonvlan_data(iface, cfg)
-
-    ifdata['interfaces'][iface] = {
-        'auto': True,
-        'data': data,
-    }
-
-    ifdata['blocks'].append({
-        'type': 'auto',
-        'empty': '\n',
-        'data': {'iface': iface},
-        'lines': 'auto ' + iface + '\n',
-    })
-    rdebug('whee, did we get the right auto data? {bl}'
-           .format(bl=ifdata['blocks'][-1]))
-    ifdata['blocks'].append({
-        'type': 'iface',
-        'empty': '',
-        'data': data,
-        'lines': build_interface_lines(iface, data),
-    })
-    rdebug('whee, did we get the right data? {bl}'
-           .format(bl=ifdata['blocks'][-1]))
-
-    ifdata['changed'] = True
-    ifdata['changed-interfaces'].add(iface)
-
-
-def write_interfaces(ifdata, fname, rdebug):
-    """
-    Write out the system network configuration if needed.
-    """
-    rdebug('writing out the interface definitions to {fname}'
-           .format(fname=fname))
-    with open(fname, 'w') as f:
-        for bl in ifdata['blocks']:
-            print(bl['empty'], end='', file=f)
-            print(bl['lines'], end='', file=f)
+    rdebug('Now about to go through the system network configuration...')
+    fixup_interfaces_file('/etc/network/interfaces', data, set())

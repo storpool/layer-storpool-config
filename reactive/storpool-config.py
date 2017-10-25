@@ -171,14 +171,6 @@ def write_out_config():
     hookenv.status_set('maintenance', '')
 
 
-def handle_interfaces():
-    """
-    Check whether any interfaces should be reconfigured.
-    """
-    cfg = spconfig.get_dict()
-    return cfg.get('SP_IFACE_NETWORKS', '') != ''
-
-
 @reactive.when('l-storpool-config.config-written')
 @reactive.when_not('l-storpool-config.config-network')
 @reactive.when_not('l-storpool-config.stopped')
@@ -191,12 +183,6 @@ def setup_interfaces():
         reactive.set_state('l-storpool-config.config-network')
         return
 
-    ifdata = spcnetwork.read_interfaces(rdebug)
-    if ifdata is None:
-        return
-    rdebug('lots of interface data: {ifaces}'
-           .format(ifaces=ifdata['interfaces']))
-
     rdebug('trying to parse the StorPool interface configuration')
     hookenv.status_set('maintenance',
                        'parsing the StorPool interface configuration')
@@ -206,64 +192,8 @@ def setup_interfaces():
         hookenv.set('error', 'No SP_IFACES in the StorPool config')
         return
     rdebug('got interfaces: {ifaces}'.format(ifaces=ifaces))
-    if not handle_interfaces():
-        rdebug('no SP_IFACE_NETWORKS definition, not setting up or '
-               'bringing any interfaces up or down')
-        reactive.set_state('l-storpool-config.config-network')
-        hookenv.status_set('maintenance', '')
-        return
 
-    for iface in ifaces.split(','):
-        if len(iface) < 1:
-            continue
-        rdebug('trying for interface {iface}'.format(iface=iface))
-        if iface not in ifdata['interfaces']:
-            spcnetwork.add_interface(ifdata, iface, rdebug)
-        else:
-            spcnetwork.update_interface_if_needed(ifdata, iface, rdebug)
-        rdebug('is it in now? {ifin}'
-               .format(ifin=iface in ifdata['interfaces']))
-
-    if ifdata['changed']:
-        changed_interfaces = sorted(ifdata['changed-interfaces'])
-        rdebug('trying to bring the changed interfaces down now')
-        handled = set()
-        for iface in reversed(changed_interfaces):
-            if iface in handled:
-                continue
-            rdebug('trying to bring interface {iface} down'
-                   .format(iface=iface))
-            subprocess.call(['ifdown', iface])
-
-        with tempfile.NamedTemporaryFile(dir='/tmp',
-                                         mode='w+t',
-                                         delete=True) as spifaces:
-            rdebug('about to write the new interfaces configuration to '
-                   'the temporary file {sp}'.format(sp=spifaces.name))
-            spcnetwork.write_interfaces(ifdata, spifaces.name, rdebug)
-            spifaces.flush()
-            rdebug('about to invoke txn install')
-            txn.install('-o', 'root', '-g', 'root', '-m', '644', '--',
-                        spifaces.name, '/etc/network/interfaces')
-            rdebug('it seems that /etc/network/interfaces has been updated')
-
-        rdebug('trying to bring the changed interfaces up now')
-        handled = set()
-        for iface in changed_interfaces:
-            if iface in handled:
-                continue
-            rdebug('trying to bring interface {iface} up'.format(iface=iface))
-            subprocess.call(['ifup', iface])
-    else:
-        rdebug('no change, no need to update /etc/network/interfaces')
-
-    rdebug('trying to bring the StorPool interfaces up now')
-    handled = set()
-    for iface in ifaces.split(','):
-        if iface in handled:
-            continue
-        rdebug('trying to bring interface {iface} up'.format(iface=iface))
-        subprocess.check_call(['ifup', iface])
+    spcnetwork.fixup_interfaces(ifaces)
 
     rdebug('well, looks like it is all done...')
     reactive.set_state('l-storpool-config.config-network')
@@ -291,11 +221,6 @@ def remove_leftovers():
     reactive.remove_state('l-storpool-config.stop')
     reset_states()
 
-    try:
-        do_handle_interfaces = handle_interfaces()
-    except Exception:
-        do_handle_interfaces = False
-
     if not sputils.check_in_lxc():
         try:
             rdebug('about to run "txn rollback" in all the containers')
@@ -315,22 +240,6 @@ def remove_leftovers():
             rdebug('Could not run "txn rollback" in all the containers: {e}'
                    .format(e=e))
 
-        if do_handle_interfaces:
-            try:
-                rdebug('about to bring any interfaces that we were using down')
-                cfg = spconfig.get_dict()
-                ifaces = cfg['SP_IFACE'].split(',')
-                for iface in ifaces:
-                    rdebug('bringing {iface} down'.format(iface=iface))
-                    subprocess.call(['ifdown', iface])
-                    if iface.find('.') != -1:
-                        parent = iface.split('.', 1)[0]
-                        rdebug('also bringing {iface} down'
-                               .format(iface=parent))
-                        subprocess.call(['ifdown', parent])
-            except Exception as e:
-                rdebug('Could not bring the interfaces down: {e}'.format(e=e))
-
     try:
         rdebug('about to roll back any txn-installed files')
         txn.rollback_if_needed()
@@ -338,21 +247,6 @@ def remove_leftovers():
         rdebug('Could not run txn rollback: {e}'.format(e=e))
 
     if not sputils.check_in_lxc():
-        if do_handle_interfaces:
-            try:
-                rdebug('about to try to bring any interfaces that '
-                       'we just brought down back up')
-                for iface in ifaces:
-                    if iface.find('.') != -1:
-                        parent = iface.split('.', 1)[0]
-                        rdebug('first bringing {iface} up'
-                               .format(iface=parent))
-                        subprocess.call(['ifup', parent])
-                    rdebug('bringing {iface} up'.format(iface=iface))
-                    subprocess.call(['ifup', iface])
-            except Exception as e:
-                rdebug('Could not bring the interfaces up: {e}'.format(e=e))
-
         try:
             rdebug('about to remove any loaded kernel modules')
 
