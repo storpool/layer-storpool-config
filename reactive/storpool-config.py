@@ -18,8 +18,10 @@ from spcharms import repo as sprepo
 from spcharms import txn
 from spcharms import utils as sputils
 
+
 def rdebug(s):
     sputils.rdebug(s, prefix='config')
+
 
 @reactive.hook('config-changed')
 def config_changed():
@@ -52,6 +54,7 @@ def config_changed():
     # This will probably race with some others, but oh well
     hookenv.status_set('maintenance', 'waiting for the StorPool charm configuration and the StorPool repo setup')
 
+
 @reactive.when('storpool-repo-add.available')
 @reactive.when_not('l-storpool-config.config-available')
 @reactive.when_not('l-storpool-config.stopped')
@@ -59,12 +62,14 @@ def not_ready_no_config():
     rdebug('well, it seems we have a repo, but we do not have a config yet')
     hookenv.status_set('maintenance', 'waiting for the StorPool charm configuration')
 
+
 @reactive.when_not('storpool-repo-add.available')
 @reactive.when('l-storpool-config.config-available')
 @reactive.when_not('l-storpool-config.stopped')
 def not_ready_no_repo():
     rdebug('well, it seems we have a config, but we do not have a repo yet')
     hookenv.status_set('maintenance', 'waiting for the StorPool repo setup')
+
 
 @reactive.when('storpool-repo-add.available', 'l-storpool-config.config-available', 'l-storpool-config.package-try-install')
 @reactive.when_not('l-storpool-config.package-installed')
@@ -100,6 +105,7 @@ def install_package():
     reactive.set_state('l-storpool-config.package-installed')
     hookenv.status_set('maintenance', '')
 
+
 @reactive.when('l-storpool-config.config-available', 'l-storpool-config.package-installed')
 @reactive.when_not('l-storpool-config.config-written')
 @reactive.when_not('l-storpool-config.stopped')
@@ -129,9 +135,11 @@ def write_out_config():
     reactive.set_state('l-storpool-config.config-written')
     hookenv.status_set('maintenance', '')
 
+
 def handle_interfaces():
     cfg = spconfig.get_dict()
     return cfg.get('SP_IFACE_NETWORKS', '') != ''
+
 
 @reactive.when('l-storpool-config.config-written')
 @reactive.when_not('l-storpool-config.config-network')
@@ -211,12 +219,14 @@ def setup_interfaces():
     reactive.set_state('l-storpool-config.config-network')
     hookenv.status_set('maintenance', '')
 
+
 def reset_states():
     rdebug('state reset requested')
     reactive.remove_state('l-storpool-config.config-available')
     reactive.remove_state('l-storpool-config.package-try-install')
     reactive.remove_state('l-storpool-config.package-installed')
     reactive.remove_state('l-storpool-config.config-written')
+
 
 @reactive.when('l-storpool-config.stop')
 @reactive.when_not('l-storpool-config.stopped')

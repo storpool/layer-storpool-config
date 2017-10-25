@@ -4,6 +4,7 @@ from charmhelpers.core import hookenv
 
 from spcharms import config as spconfig
 
+
 def read_interfaces(rdebug):
     rdebug('trying to parse the system interface configuration')
     hookenv.status_set('maintenance', 'parsing the system interface configuration')
@@ -114,6 +115,7 @@ def read_interfaces(rdebug):
     rdebug('done with the /etc/network/interfaces file')
     return { 'blocks': blocks, 'interfaces': interfaces, 'changed': False, 'changed-interfaces': set(), }
 
+
 def get_spiface_network(iface):
     cfg = spconfig.get_dict()
     nets = dict(map(
@@ -137,6 +139,7 @@ nonvlandef = {
     ],
 }
 
+
 def build_interface_lines(iface, data):
     res = 'iface ' + iface + ' inet static\n';
     for var in sorted(data.keys()):
@@ -147,6 +150,7 @@ def build_interface_lines(iface, data):
             res += '  ' + var + ' ' + value + '\n'
     return res
         
+
 def build_vlan_data(iface, parent, cfg):
     data = {
         'address': get_spiface_network(iface) + cfg['SP_OURID'],
@@ -160,6 +164,7 @@ def build_vlan_data(iface, parent, cfg):
 
     return data
 
+
 def build_nonvlan_data(iface, cfg):
     data = {
         'address': get_spiface_network(iface) + cfg['SP_OURID'],
@@ -171,6 +176,7 @@ def build_nonvlan_data(iface, cfg):
     data.update(nonvlandef)
 
     return data
+
 
 def update_interface_if_needed(ifdata, iface, rdebug):
     rdebug('updating the {iface} interface if needed'.format(iface=iface))
@@ -232,6 +238,7 @@ def update_interface_if_needed(ifdata, iface, rdebug):
     else:
         rdebug('nothing seems to have changed for {iface}'.format(iface=iface))
 
+
 def add_interface(ifdata, iface, rdebug):
     rdebug('adding interface {iface}'.format(iface=iface))
     cfg = spconfig.get_dict()
@@ -267,6 +274,7 @@ def add_interface(ifdata, iface, rdebug):
 
     ifdata['changed'] = True
     ifdata['changed-interfaces'].add(iface)
+
 
 def write_interfaces(ifdata, fname, rdebug):
     rdebug('writing out the interface definitions to {fname}'.format(fname=fname))
