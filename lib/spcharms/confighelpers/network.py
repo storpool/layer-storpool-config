@@ -208,7 +208,7 @@ def update_interface_if_needed(ifdata, iface, rdebug):
 
         if var.startswith('pre-') or var.startswith('post-'):
             for line in wanted:
-                if not line in current:
+                if line not in current:
                     current.append(line)
                     changed = True
         else:
