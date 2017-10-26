@@ -16,6 +16,7 @@ from charmhelpers.core import hookenv
 from spcharms import config as spconfig
 from spcharms.confighelpers import network as spcnetwork
 from spcharms import repo as sprepo
+from spcharms import status as spstatus
 from spcharms import txn
 from spcharms import utils as sputils
 
@@ -64,9 +65,9 @@ def config_changed():
     reactive.remove_state('l-storpool-config.config-network')
 
     # This will probably race with some others, but oh well
-    hookenv.status_set('maintenance',
-                       'waiting for the StorPool charm configuration and '
-                       'the StorPool repo setup')
+    spstatus.npset('maintenance',
+                   'waiting for the StorPool charm configuration and '
+                   'the StorPool repo setup')
 
 
 @reactive.when('storpool-repo-add.available')
@@ -77,8 +78,8 @@ def not_ready_no_config():
     Note that some configuration settings are missing.
     """
     rdebug('well, it seems we have a repo, but we do not have a config yet')
-    hookenv.status_set('maintenance',
-                       'waiting for the StorPool charm configuration')
+    spstatus.npset('maintenance',
+                   'waiting for the StorPool charm configuration')
 
 
 @reactive.when_not('storpool-repo-add.available')
@@ -89,7 +90,7 @@ def not_ready_no_repo():
     Note that the `storpool-repo` layer has not yet completed its work.
     """
     rdebug('well, it seems we have a config, but we do not have a repo yet')
-    hookenv.status_set('maintenance', 'waiting for the StorPool repo setup')
+    spstatus.npset('maintenance', 'waiting for the StorPool repo setup')
 
 
 @reactive.when('storpool-repo-add.available',
@@ -104,15 +105,14 @@ def install_package():
     rdebug('the repo hook has become available and '
            'we do have the configuration')
 
-    hookenv.status_set('maintenance',
-                       'obtaining the requested StorPool version')
+    spstatus.npset('maintenance', 'obtaining the requested StorPool version')
     spver = hookenv.config().get('storpool_version', None)
     if spver is None or spver == '':
         rdebug('no storpool_version key in the charm config yet')
         return
 
-    hookenv.status_set('maintenance',
-                       'installing the StorPool configuration packages')
+    spstatus.npset('maintenance',
+                   'installing the StorPool configuration packages')
     reactive.remove_state('l-storpool-config.package-try-install')
     (err, newly_installed) = sprepo.install_packages({
         'txn-install': '*',
@@ -133,7 +133,7 @@ def install_package():
 
     rdebug('setting the package-installed state')
     reactive.set_state('l-storpool-config.package-installed')
-    hookenv.status_set('maintenance', '')
+    spstatus.npset('maintenance', '')
 
 
 @reactive.when('l-storpool-config.config-available',
@@ -145,7 +145,7 @@ def write_out_config():
     Write out the StorPool configuration file specified in the charm config.
     """
     rdebug('about to write out the /etc/storpool.conf file')
-    hookenv.status_set('maintenance', 'updating the /etc/storpool.conf file')
+    spstatus.npset('maintenance', 'updating the /etc/storpool.conf file')
     with tempfile.NamedTemporaryFile(dir='/tmp',
                                      mode='w+t',
                                      delete=True) as spconf:
@@ -171,7 +171,7 @@ def write_out_config():
 
     rdebug('setting the config-written state')
     reactive.set_state('l-storpool-config.config-written')
-    hookenv.status_set('maintenance', '')
+    spstatus.npset('maintenance', '')
 
 
 @reactive.when('l-storpool-config.config-written')
@@ -187,8 +187,8 @@ def setup_interfaces():
         return
 
     rdebug('trying to parse the StorPool interface configuration')
-    hookenv.status_set('maintenance',
-                       'parsing the StorPool interface configuration')
+    spstatus.npset('maintenance',
+                   'parsing the StorPool interface configuration')
     cfg = spconfig.get_dict()
     ifaces = cfg.get('SP_IFACE', None)
     if ifaces is None:
@@ -200,7 +200,7 @@ def setup_interfaces():
 
     rdebug('well, looks like it is all done...')
     reactive.set_state('l-storpool-config.config-network')
-    hookenv.status_set('maintenance', '')
+    spstatus.npset('maintenance', '')
 
 
 def reset_states():
