@@ -10,7 +10,6 @@ import subprocess
 from charmhelpers.core import templating
 
 from charms import reactive
-from charms.reactive import helpers as rhelpers
 from charmhelpers.core import hookenv
 
 from spcharms import config as spconfig
@@ -46,11 +45,6 @@ def config_changed():
         reactive.remove_state('l-storpool-config.config-network')
         reactive.remove_state('l-storpool-config.package-installed')
         reactive.remove_state('l-storpool-config.package-try-install')
-        return
-
-    if not config.changed('storpool_conf') and \
-       rhelpers.is_state('l-storpool-config.package-installed'):
-        rdebug('apparently the storpool_conf setting has not changed')
         return
 
     rdebug('removing the config-written state')

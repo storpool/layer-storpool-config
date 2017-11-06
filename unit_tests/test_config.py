@@ -60,22 +60,17 @@ class MockConfig(object):
         saved = initializing_config
         initializing_config = self
         self.override = {}
-        self.changed_attrs = {}
         self.config = {}
         initializing_config = saved
 
     def __init__(self):
         self.r_clear_config()
 
-    def r_set(self, key, value, changed):
+    def r_set(self, key, value):
         self.override[key] = value
-        self.changed_attrs[key] = changed
 
     def get(self, key, default):
         return self.override.get(key, self.config.get(key, default))
-
-    def changed(self, key):
-        return self.changed_attrs.get(key, False)
 
     def __getitem__(self, name):
         # Make sure a KeyError is actually thrown if needed.
@@ -185,47 +180,24 @@ class TestStorPoolConfig(testtools.TestCase):
         self.assertEquals(states['none'], r_state.r_get_states())
         self.assertEquals(count_npset, npset.call_count)
 
-        # FIXME: remove the change checks at all!
-
-        # A real value for storpool_conf, but no change
+        # A real value for storpool_conf
         r_state.r_set_states(states['none'])
-        r_config.r_set('storpool_conf', 'something', False)
+        r_config.r_set('storpool_conf', 'something')
         testee.config_changed()
         self.assertEquals(states['got-config'], r_state.r_get_states())
         self.assertEquals(count_npset + 1, npset.call_count)
 
         r_state.r_set_states(states['weird'])
-        r_config.r_set('storpool_conf', 'something', False)
-        testee.config_changed()
-        # FIXME: this one should be plain got-config
-        self.assertEquals(states['weird'], r_state.r_get_states())
-        self.assertEquals(count_npset + 1, npset.call_count)
-
-        r_state.r_set_states(states['all'])
-        r_config.r_set('storpool_conf', 'something', False)
-        testee.config_changed()
-        # FIXME: this one should be plain got-config
-        self.assertEquals(states['all'], r_state.r_get_states())
-        self.assertEquals(count_npset + 1, npset.call_count)
-
-        # A real, new value for storpool_conf
-        r_state.r_set_states(states['none'])
-        r_config.r_set('storpool_conf', 'something', True)
+        r_config.r_set('storpool_conf', 'something')
         testee.config_changed()
         self.assertEquals(states['got-config'], r_state.r_get_states())
         self.assertEquals(count_npset + 2, npset.call_count)
 
-        r_state.r_set_states(states['weird'])
-        r_config.r_set('storpool_conf', 'something', True)
+        r_state.r_set_states(states['all'])
+        r_config.r_set('storpool_conf', 'something')
         testee.config_changed()
         self.assertEquals(states['got-config'], r_state.r_get_states())
         self.assertEquals(count_npset + 3, npset.call_count)
-
-        r_state.r_set_states(states['all'])
-        r_config.r_set('storpool_conf', 'something', True)
-        testee.config_changed()
-        self.assertEquals(states['got-config'], r_state.r_get_states())
-        self.assertEquals(count_npset + 4, npset.call_count)
 
     @mock_reactive_states
     def test_install_package(self):
@@ -244,7 +216,7 @@ class TestStorPoolConfig(testtools.TestCase):
         self.assertEquals(set(), r_state.r_get_states())
 
         # Okay, now let's give it something to install... and fail.
-        r_config.r_set('storpool_version', '0.1.0', False)
+        r_config.r_set('storpool_version', '0.1.0')
         sprepo.install_packages.return_value = ('oops', [])
         testee.install_package()
         self.assertEquals(count_npset + 3, spstatus.npset.call_count)
@@ -286,7 +258,7 @@ class TestStorPoolConfig(testtools.TestCase):
         conf_text = ''.join(map(lambda key: '{var}={value}\n'
                                 .format(var=key, value=conf[key]),
                                 sorted(conf)))
-        r_config.r_set('storpool_conf', conf_text, True)
+        r_config.r_set('storpool_conf', conf_text)
 
         def txn_check(*args):
             self.assertTrue(len(args) >= 2)
