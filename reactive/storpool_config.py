@@ -38,7 +38,7 @@ def config_changed():
     spconf = config.get('storpool_conf', None)
     rdebug('and we do{xnot} have a storpool_conf setting'
            .format(xnot=' not' if spconf is None else ''))
-    if spconf is None:
+    if spconf is None or spconf == '':
         rdebug('removing the config-available state')
         reactive.remove_state('l-storpool-config.config-available')
         reactive.remove_state('l-storpool-config.config-written')

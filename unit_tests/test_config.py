@@ -180,6 +180,24 @@ class TestStorPoolConfig(testtools.TestCase):
         self.assertEquals(states['none'], r_state.r_get_states())
         self.assertEquals(count_npset, npset.call_count)
 
+        # An empty string should feel the same.
+        r_config.r_set('storpool_conf', '')
+
+        r_state.r_set_states(states['none'])
+        testee.config_changed()
+        self.assertEquals(states['none'], r_state.r_get_states())
+        self.assertEquals(count_npset, npset.call_count)
+
+        r_state.r_set_states(states['weird'])
+        testee.config_changed()
+        self.assertEquals(states['none'], r_state.r_get_states())
+        self.assertEquals(count_npset, npset.call_count)
+
+        r_state.r_set_states(states['all'])
+        testee.config_changed()
+        self.assertEquals(states['none'], r_state.r_get_states())
+        self.assertEquals(count_npset, npset.call_count)
+
         # A real value for storpool_conf
         r_state.r_set_states(states['none'])
         r_config.r_set('storpool_conf', 'something')
