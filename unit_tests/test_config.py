@@ -121,15 +121,15 @@ INSTALLED_STATE = 'l-storpool-config.package-installed'
 COPIED_STATE = 'storpool-config.config-written'
 
 
-class TestStorPoolBlock(testtools.TestCase):
+class TestStorPoolConfig(testtools.TestCase):
     """
-    Test various aspects of the storpool-beacon layer.
+    Test various aspects of the storpool-config layer.
     """
     def setUp(self):
         """
         Clean up the reactive states information between tests.
         """
-        super(TestStorPoolBlock, self).setUp()
+        super(TestStorPoolConfig, self).setUp()
         r_state.r_clear_states()
         r_config.r_clear_config()
         sputils.err.side_effect = lambda *args: self.fail_on_err(*args)
