@@ -138,6 +138,106 @@ class TestStorPoolConfig(testtools.TestCase):
         self.fail('sputils.err() invoked: {msg}'.format(msg=msg))
 
     @mock_reactive_states
+    @mock.patch('spcharms.status.npset')
+    def test_check_config(self, npset):
+        """
+        Test that the config-changed hook properly detects the presence of
+        the storpool_conf setting.
+        """
+        states = {
+            'none': set([
+            ]),
+
+            'all': set([
+                'l-storpool-config.config-available',
+                'l-storpool-config.config-written',
+                'l-storpool-config.config-network',
+                'l-storpool-config.package-installed',
+                'l-storpool-config.package-try-install',
+            ]),
+
+            'weird': set([
+                'l-storpool-config.config-written',
+                'l-storpool-config.config-network',
+                'l-storpool-config.package-installed',
+            ]),
+
+            'no-config': set([
+                'l-storpool-config.package-installed',
+                'l-storpool-config.package-try-install',
+            ]),
+
+            'weird-no-config': set([
+                'l-storpool-config.package-installed',
+            ]),
+
+            'got-config': set([
+                'l-storpool-config.config-available',
+                'l-storpool-config.package-try-install',
+            ]),
+        }
+        count_npset = npset.call_count
+
+        # No configuration at all
+        r_state.r_set_states(states['none'])
+        testee.config_changed()
+        self.assertEquals(states['none'], r_state.r_get_states())
+        self.assertEquals(count_npset, npset.call_count)
+
+        r_state.r_set_states(states['weird'])
+        testee.config_changed()
+        # FIXME: this one should be 'none'
+        self.assertEquals(states['weird-no-config'], r_state.r_get_states())
+        self.assertEquals(count_npset, npset.call_count)
+
+        r_state.r_set_states(states['all'])
+        testee.config_changed()
+        self.assertEquals(states['no-config'], r_state.r_get_states())
+        self.assertEquals(count_npset, npset.call_count)
+
+        # FIXME: remove the change checks at all!
+
+        # A real value for storpool_conf, but no change
+        r_state.r_set_states(states['none'])
+        r_config.r_set('storpool_conf', 'something', False)
+        testee.config_changed()
+        self.assertEquals(states['got-config'], r_state.r_get_states())
+        self.assertEquals(count_npset + 1, npset.call_count)
+
+        r_state.r_set_states(states['weird'])
+        r_config.r_set('storpool_conf', 'something', False)
+        testee.config_changed()
+        # FIXME: this one should be plain got-config
+        self.assertEquals(states['weird'], r_state.r_get_states())
+        self.assertEquals(count_npset + 1, npset.call_count)
+
+        r_state.r_set_states(states['all'])
+        r_config.r_set('storpool_conf', 'something', False)
+        testee.config_changed()
+        # FIXME: this one should be plain got-config
+        self.assertEquals(states['all'], r_state.r_get_states())
+        self.assertEquals(count_npset + 1, npset.call_count)
+
+        # A real, new value for storpool_conf
+        r_state.r_set_states(states['none'])
+        r_config.r_set('storpool_conf', 'something', True)
+        testee.config_changed()
+        self.assertEquals(states['got-config'], r_state.r_get_states())
+        self.assertEquals(count_npset + 2, npset.call_count)
+
+        r_state.r_set_states(states['weird'])
+        r_config.r_set('storpool_conf', 'something', True)
+        testee.config_changed()
+        self.assertEquals(states['got-config'], r_state.r_get_states())
+        self.assertEquals(count_npset + 3, npset.call_count)
+
+        r_state.r_set_states(states['all'])
+        r_config.r_set('storpool_conf', 'something', True)
+        testee.config_changed()
+        self.assertEquals(states['got-config'], r_state.r_get_states())
+        self.assertEquals(count_npset + 4, npset.call_count)
+
+    @mock_reactive_states
     def test_install_package(self):
         """
         Test that the layer attempts to install packages correctly.
