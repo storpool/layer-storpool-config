@@ -233,11 +233,18 @@ class TestStorPoolConfig(testtools.TestCase):
         self.assertEquals(count_record, sprepo.record_packages.call_count)
         self.assertEquals(set(), r_state.r_get_states())
 
+        # An empty string should feel the same...
+        testee.install_package()
+        self.assertEquals(count_npset + 2, spstatus.npset.call_count)
+        self.assertEquals(count_install, sprepo.install_packages.call_count)
+        self.assertEquals(count_record, sprepo.record_packages.call_count)
+        self.assertEquals(set(), r_state.r_get_states())
+
         # Okay, now let's give it something to install... and fail.
         r_config.r_set('storpool_version', '0.1.0')
         sprepo.install_packages.return_value = ('oops', [])
         testee.install_package()
-        self.assertEquals(count_npset + 3, spstatus.npset.call_count)
+        self.assertEquals(count_npset + 4, spstatus.npset.call_count)
         self.assertEquals(count_install + 1,
                           sprepo.install_packages.call_count)
         self.assertEquals(count_record, sprepo.record_packages.call_count)
@@ -246,7 +253,7 @@ class TestStorPoolConfig(testtools.TestCase):
         # Right, now let's pretend that there was nothing to install
         sprepo.install_packages.return_value = (None, [])
         testee.install_package()
-        self.assertEquals(count_npset + 6, spstatus.npset.call_count)
+        self.assertEquals(count_npset + 7, spstatus.npset.call_count)
         self.assertEquals(count_install + 2,
                           sprepo.install_packages.call_count)
         self.assertEquals(count_record, sprepo.record_packages.call_count)
@@ -256,7 +263,7 @@ class TestStorPoolConfig(testtools.TestCase):
         r_state.r_set_states(set())
         sprepo.install_packages.return_value = (None, ['storpool-beacon'])
         testee.install_package()
-        self.assertEquals(count_npset + 9, spstatus.npset.call_count)
+        self.assertEquals(count_npset + 10, spstatus.npset.call_count)
         self.assertEquals(count_install + 3,
                           sprepo.install_packages.call_count)
         self.assertEquals(count_record + 1, sprepo.record_packages.call_count)
