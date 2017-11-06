@@ -162,15 +162,6 @@ class TestStorPoolConfig(testtools.TestCase):
                 'l-storpool-config.package-installed',
             ]),
 
-            'no-config': set([
-                'l-storpool-config.package-installed',
-                'l-storpool-config.package-try-install',
-            ]),
-
-            'weird-no-config': set([
-                'l-storpool-config.package-installed',
-            ]),
-
             'got-config': set([
                 'l-storpool-config.config-available',
                 'l-storpool-config.package-try-install',
@@ -186,13 +177,12 @@ class TestStorPoolConfig(testtools.TestCase):
 
         r_state.r_set_states(states['weird'])
         testee.config_changed()
-        # FIXME: this one should be 'none'
-        self.assertEquals(states['weird-no-config'], r_state.r_get_states())
+        self.assertEquals(states['none'], r_state.r_get_states())
         self.assertEquals(count_npset, npset.call_count)
 
         r_state.r_set_states(states['all'])
         testee.config_changed()
-        self.assertEquals(states['no-config'], r_state.r_get_states())
+        self.assertEquals(states['none'], r_state.r_get_states())
         self.assertEquals(count_npset, npset.call_count)
 
         # FIXME: remove the change checks at all!

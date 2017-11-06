@@ -44,6 +44,8 @@ def config_changed():
         reactive.remove_state('l-storpool-config.config-available')
         reactive.remove_state('l-storpool-config.config-written')
         reactive.remove_state('l-storpool-config.config-network')
+        reactive.remove_state('l-storpool-config.package-installed')
+        reactive.remove_state('l-storpool-config.package-try-install')
         return
 
     if not config.changed('storpool_conf') and \
