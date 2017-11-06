@@ -6,7 +6,7 @@ A set of unit tests for the storpool-config layer.
 
 import os
 import sys
-import testtools
+import unittest
 
 import mock
 
@@ -116,7 +116,7 @@ INSTALLED_STATE = 'l-storpool-config.package-installed'
 COPIED_STATE = 'storpool-config.config-written'
 
 
-class TestStorPoolConfig(testtools.TestCase):
+class TestStorPoolConfig(unittest.TestCase):
     """
     Test various aspects of the storpool-config layer.
     """
