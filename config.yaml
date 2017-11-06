@@ -6,3 +6,4 @@ options:
   storpool_version:
     type: string
     description: The version of the StorPool Ubuntu packages to install.
+    default:
