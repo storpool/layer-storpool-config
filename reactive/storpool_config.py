@@ -8,7 +8,7 @@ import tempfile
 import subprocess
 
 from charms import reactive
-from charmhelpers.core import hookenv, templating, unitdata
+from charmhelpers.core import hookenv, templating
 
 from spcharms import config as spconfig
 from spcharms.confighelpers import network as spcnetwork
@@ -37,7 +37,7 @@ def config_changed():
     reactive.remove_state('l-storpool-config.config-written')
     reactive.remove_state('l-storpool-config.config-network')
     reactive.remove_state('l-storpool-config.package-installed')
-    unitdata.kv().unset('storpool-config.our-id')
+    spconfig.unset_our_id()
 
     spconf = config.get('storpool_conf', None)
     rdebug('and we do{xnot} have a storpool_conf setting'
@@ -156,7 +156,7 @@ def write_out_config():
         spconfig.drop_cache()
         cfg = spconfig.get_dict()
         oid = cfg['SP_OURID']
-        unitdata.kv().set('storpool-config.our-id', oid)
+        spconfig.set_our_id(oid)
         rdebug('got {len} keys in the StorPool config, our id is {oid}'
                .format(len=len(cfg), oid=oid))
 
