@@ -7,10 +7,8 @@ import os
 import tempfile
 import subprocess
 
-from charmhelpers.core import templating
-
 from charms import reactive
-from charmhelpers.core import hookenv
+from charmhelpers.core import hookenv, templating, unitdata
 
 from spcharms import config as spconfig
 from spcharms.confighelpers import network as spcnetwork
@@ -163,7 +161,10 @@ def write_out_config():
         rdebug('trying to read it now')
         spconfig.drop_cache()
         cfg = spconfig.get_dict()
-        rdebug('got {len} keys in the StorPool config'.format(len=len(cfg)))
+        oid = cfg['SP_OURID']
+        unitdata.kv().set('storpool-config.our-id', oid)
+        rdebug('got {len} keys in the StorPool config, our id is {oid}'
+               .format(len=len(cfg), oid=oid))
 
     rdebug('setting the config-written state')
     reactive.set_state('l-storpool-config.config-written')

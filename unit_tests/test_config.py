@@ -270,8 +270,9 @@ class TestStorPoolConfig(unittest.TestCase):
         self.assertEquals(set([INSTALLED_STATE]), r_state.r_get_states())
 
     @mock_reactive_states
+    @mock.patch('charmhelpers.core.unitdata.kv')
     @mock.patch('charmhelpers.core.hookenv.charm_dir')
-    def test_write_out_config(self, charm_dir):
+    def test_write_out_config(self, charm_dir, kv):
         """
         Test that the config file written is actually the same as
         the one supplied in the charm configuration.
@@ -285,7 +286,29 @@ class TestStorPoolConfig(unittest.TestCase):
                                 sorted(conf)))
         r_config.r_set('storpool_conf', conf_text)
 
+        class MockKV(object):
+            """
+            Mock a unitdata.kv() object for a single set() call.
+            """
+            def __init__(self, tester):
+                """
+                Tell us which TestCase object to use.
+                """
+                self.tester = tester
+                pass
+
+            def set(self, key, value):
+                """
+                Make sure unitdata.kv().set() was invoked correctly.
+                """
+                self.tester.assertEquals('storpool-config.our-id', key)
+                self.tester.assertEquals(conf['SP_OURID'], value)
+                self.tester.kv_set_call_count += 1
+
         def txn_check(*args):
+            """
+            Make sure txn.install() was invoked correctly.
+            """
             self.assertTrue(len(args) >= 2)
             self.assertEqual(args[-1], '/etc/storpool.conf')
             with open(args[-2], mode='r') as f:
@@ -295,5 +318,9 @@ class TestStorPoolConfig(unittest.TestCase):
         txn.install.side_effect = txn_check
         spconfig.get_dict.return_value = conf
         charm_dir.return_value = os.getcwd()
+        kv.return_value = MockKV(self)
+        self.kv_set_call_count = 0
 
         testee.write_out_config()
+        self.assertEquals(1, kv.call_count)
+        self.assertEquals(1, self.kv_set_call_count)
