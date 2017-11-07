@@ -33,30 +33,23 @@ def config_changed():
     rdebug('config-changed happened')
     config = hookenv.config()
 
+    # Remove any states that say we have accomplished anything...
+    reactive.remove_state('l-storpool-config.config-written')
+    reactive.remove_state('l-storpool-config.config-network')
+    reactive.remove_state('l-storpool-config.package-installed')
+
     spconf = config.get('storpool_conf', None)
     rdebug('and we do{xnot} have a storpool_conf setting'
            .format(xnot=' not' if spconf is None else ''))
     if spconf is None or spconf == '':
         rdebug('removing the config-available state')
         reactive.remove_state('l-storpool-config.config-available')
-        reactive.remove_state('l-storpool-config.config-written')
-        reactive.remove_state('l-storpool-config.config-network')
-        reactive.remove_state('l-storpool-config.package-installed')
         reactive.remove_state('l-storpool-config.package-try-install')
         return
 
-    rdebug('removing the config-written state')
-    reactive.remove_state('l-storpool-config.config-written')
-
-    rdebug('setting the config-available state')
-    reactive.set_state('l-storpool-config.config-available')
-
     # And let's make sure we try installing any packages we need...
-    reactive.remove_state('l-storpool-config.package-installed')
+    reactive.set_state('l-storpool-config.config-available')
     reactive.set_state('l-storpool-config.package-try-install')
-
-    # And the network configuration, too...
-    reactive.remove_state('l-storpool-config.config-network')
 
     # This will probably race with some others, but oh well
     spstatus.npset('maintenance',
