@@ -37,6 +37,7 @@ def config_changed():
     reactive.remove_state('l-storpool-config.config-written')
     reactive.remove_state('l-storpool-config.config-network')
     reactive.remove_state('l-storpool-config.package-installed')
+    unitdata.kv().unset('storpool-config.our-id')
 
     spconf = config.get('storpool_conf', None)
     rdebug('and we do{xnot} have a storpool_conf setting'

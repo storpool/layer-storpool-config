@@ -133,8 +133,9 @@ class TestStorPoolConfig(unittest.TestCase):
         self.fail('sputils.err() invoked: {msg}'.format(msg=msg))
 
     @mock_reactive_states
+    @mock.patch('charmhelpers.core.unitdata.kv')
     @mock.patch('spcharms.status.npset')
-    def test_check_config(self, npset):
+    def test_check_config(self, npset, kv):
         """
         Test that the config-changed hook properly detects the presence of
         the storpool_conf setting.
@@ -164,21 +165,45 @@ class TestStorPoolConfig(unittest.TestCase):
         }
         count_npset = npset.call_count
 
+        class MockKV(object):
+            """
+            Mock a unitdata.kv() object for a single unset() call.
+            """
+            def __init__(self, tester):
+                """
+                Tell us which TestCase object to use.
+                """
+                self.tester = tester
+                pass
+
+            def unset(self, key):
+                """
+                Make sure unitdata.kv().unset() was invoked correctly.
+                """
+                self.tester.assertEquals('storpool-config.our-id', key)
+                self.tester.kv_unset_call_count += 1
+
+        kv.return_value = MockKV(self)
+
         # No configuration at all
         r_state.r_set_states(states['none'])
+        self.kv_unset_call_count = 0
         testee.config_changed()
         self.assertEquals(states['none'], r_state.r_get_states())
         self.assertEquals(count_npset, npset.call_count)
+        self.assertEquals(1, self.kv_unset_call_count)
 
         r_state.r_set_states(states['weird'])
         testee.config_changed()
         self.assertEquals(states['none'], r_state.r_get_states())
         self.assertEquals(count_npset, npset.call_count)
+        self.assertEquals(2, self.kv_unset_call_count)
 
         r_state.r_set_states(states['all'])
         testee.config_changed()
         self.assertEquals(states['none'], r_state.r_get_states())
         self.assertEquals(count_npset, npset.call_count)
+        self.assertEquals(3, self.kv_unset_call_count)
 
         # An empty string should feel the same.
         r_config.r_set('storpool_conf', '')
@@ -187,16 +212,19 @@ class TestStorPoolConfig(unittest.TestCase):
         testee.config_changed()
         self.assertEquals(states['none'], r_state.r_get_states())
         self.assertEquals(count_npset, npset.call_count)
+        self.assertEquals(4, self.kv_unset_call_count)
 
         r_state.r_set_states(states['weird'])
         testee.config_changed()
         self.assertEquals(states['none'], r_state.r_get_states())
         self.assertEquals(count_npset, npset.call_count)
+        self.assertEquals(5, self.kv_unset_call_count)
 
         r_state.r_set_states(states['all'])
         testee.config_changed()
         self.assertEquals(states['none'], r_state.r_get_states())
         self.assertEquals(count_npset, npset.call_count)
+        self.assertEquals(6, self.kv_unset_call_count)
 
         # A real value for storpool_conf
         r_state.r_set_states(states['none'])
@@ -204,18 +232,21 @@ class TestStorPoolConfig(unittest.TestCase):
         testee.config_changed()
         self.assertEquals(states['got-config'], r_state.r_get_states())
         self.assertEquals(count_npset + 1, npset.call_count)
+        self.assertEquals(7, self.kv_unset_call_count)
 
         r_state.r_set_states(states['weird'])
         r_config.r_set('storpool_conf', 'something')
         testee.config_changed()
         self.assertEquals(states['got-config'], r_state.r_get_states())
         self.assertEquals(count_npset + 2, npset.call_count)
+        self.assertEquals(8, self.kv_unset_call_count)
 
         r_state.r_set_states(states['all'])
         r_config.r_set('storpool_conf', 'something')
         testee.config_changed()
         self.assertEquals(states['got-config'], r_state.r_get_states())
         self.assertEquals(count_npset + 3, npset.call_count)
+        self.assertEquals(9, self.kv_unset_call_count)
 
     @mock_reactive_states
     def test_install_package(self):
