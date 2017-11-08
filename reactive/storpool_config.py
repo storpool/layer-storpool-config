@@ -3,7 +3,6 @@ A Juju layer for installing and configuring the base StorPool packages.
 """
 from __future__ import print_function
 
-import os
 import tempfile
 import subprocess
 
@@ -224,25 +223,6 @@ def remove_leftovers():
     rdebug('storpool-config.stop invoked')
     reactive.remove_state('l-storpool-config.stop')
     reset_states()
-
-    if not sputils.check_in_lxc():
-        try:
-            rdebug('about to run "txn rollback" in all the containers')
-            for lxd in txn.LXD.construct_all():
-                if lxd.prefix == '':
-                    continue
-                if not os.path.exists(lxd.prefix + '/var/lib/txn/txn.index'):
-                    rdebug('- no txn.index in the {name} container, skipping'
-                           .format(name=lxd.name))
-                    continue
-                rdebug('- about to run "txn rollback" in {name}'
-                       .format(name=lxd.name))
-                res = lxd.exec_with_output(['txn', '--', 'rollback',
-                                            txn.module_name()])
-                rdebug('  - txn rollback completed: {res}'.format(res=res))
-        except Exception as e:
-            rdebug('Could not run "txn rollback" in all the containers: {e}'
-                   .format(e=e))
 
     try:
         rdebug('about to roll back any txn-installed files')
