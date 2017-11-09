@@ -48,6 +48,7 @@ def register():
     })
 
 
+@reactive.when('storpool-helper.config-set')
 @reactive.when('l-storpool-config.configure')
 @reactive.when_not('l-storpool-config.configured')
 @reactive.when_not('l-storpool-config.stopped')
@@ -57,7 +58,7 @@ def config_changed():
     """
     rdebug('config-changed happened')
     reactive.remove_state('l-storpool-config.configure')
-    config = hookenv.config()
+    config = spconfig.m()
 
     # Remove any states that say we have accomplished anything...
     for state in STATES_REDO['unset']:
@@ -103,6 +104,7 @@ def not_ready_no_repo():
     spstatus.npset('maintenance', 'waiting for the StorPool repo setup')
 
 
+@reactive.when('storpool-helper.config-set')
 @reactive.when('storpool-repo-add.available',
                'l-storpool-config.config-available',
                'l-storpool-config.package-try-install')
@@ -116,7 +118,7 @@ def install_package():
            'we do have the configuration')
 
     spstatus.npset('maintenance', 'obtaining the requested StorPool version')
-    spver = hookenv.config().get('storpool_version', None)
+    spver = spconfig.m().get('storpool_version', None)
     if spver is None or spver == '':
         rdebug('no storpool_version key in the charm config yet')
         return
@@ -146,6 +148,7 @@ def install_package():
     spstatus.npset('maintenance', '')
 
 
+@reactive.when('storpool-helper.config-set')
 @reactive.when('l-storpool-config.config-available',
                'l-storpool-config.package-installed')
 @reactive.when_not('l-storpool-config.config-written')
@@ -166,7 +169,7 @@ def write_out_config():
                           owner='root',
                           perms=0o600,
                           context={
-                           'storpool_conf': hookenv.config()['storpool_conf'],
+                           'storpool_conf': spconfig.m()['storpool_conf'],
                           },
                           )
         rdebug('about to invoke txn install')
