@@ -12,9 +12,22 @@ from charmhelpers.core import hookenv, templating
 from spcharms import config as spconfig
 from spcharms.confighelpers import network as spcnetwork
 from spcharms import repo as sprepo
+from spcharms import states as spstates
 from spcharms import status as spstatus
 from spcharms import txn
 from spcharms import utils as sputils
+
+STATES_REDO = {
+    'set': ['l-storpool-config.configure'],
+    'unset': [
+        'l-storpool-config.configured',
+        'l-storpool-config.config-available',
+        'l-storpool-config.config-written',
+        'l-storpool-config.config-network',
+        'l-storpool-config.package-try-install',
+        'l-storpool-config.package-installed',
+    ],
+}
 
 
 def rdebug(s):
@@ -24,27 +37,37 @@ def rdebug(s):
     sputils.rdebug(s, prefix='config')
 
 
-@reactive.hook('config-changed')
+@reactive.hook('install')
+def register():
+    """
+    Register our hook state mappings.
+    """
+    spstates.register('storpool-config', {
+        'config-changed': STATES_REDO,
+        'upgrade-charm': STATES_REDO,
+    })
+
+
+@reactive.when('l-storpool-config.configure')
+@reactive.when_not('l-storpool-config.configured')
+@reactive.when_not('l-storpool-config.stopped')
 def config_changed():
     """
     Check if the configuration is complete or has been changed.
     """
     rdebug('config-changed happened')
+    reactive.remove_state('l-storpool-config.configure')
     config = hookenv.config()
 
     # Remove any states that say we have accomplished anything...
-    reactive.remove_state('l-storpool-config.config-written')
-    reactive.remove_state('l-storpool-config.config-network')
-    reactive.remove_state('l-storpool-config.package-installed')
+    for state in STATES_REDO['unset']:
+        reactive.remove_state(state)
     spconfig.unset_our_id()
 
     spconf = config.get('storpool_conf', None)
     rdebug('and we do{xnot} have a storpool_conf setting'
            .format(xnot=' not' if spconf is None else ''))
     if spconf is None or spconf == '':
-        rdebug('removing the config-available state')
-        reactive.remove_state('l-storpool-config.config-available')
-        reactive.remove_state('l-storpool-config.package-try-install')
         return
 
     # And let's make sure we try installing any packages we need...
@@ -193,27 +216,6 @@ def setup_interfaces():
     spstatus.npset('maintenance', '')
 
 
-def reset_states():
-    """
-    Go through the whole install/configure cycle.
-    """
-    rdebug('state reset requested')
-    reactive.remove_state('l-storpool-config.config-available')
-    reactive.remove_state('l-storpool-config.package-try-install')
-    reactive.remove_state('l-storpool-config.package-installed')
-    reactive.remove_state('l-storpool-config.config-written')
-    reactive.remove_state('l-storpool-config.config-network')
-
-
-@reactive.hook('upgrade-charm')
-def upgrade():
-    """
-    Go through the whole cycle on upgrade.
-    """
-    rdebug('upgrading the charm')
-    reset_states()
-
-
 @reactive.when('l-storpool-config.stop')
 @reactive.when_not('l-storpool-config.stopped')
 def remove_leftovers():
@@ -222,7 +224,6 @@ def remove_leftovers():
     """
     rdebug('storpool-config.stop invoked')
     reactive.remove_state('l-storpool-config.stop')
-    reset_states()
 
     try:
         rdebug('about to roll back any txn-installed files')
@@ -268,3 +269,5 @@ def remove_leftovers():
 
     rdebug('goodbye, weird world!')
     reactive.set_state('l-storpool-config.stopped')
+    for state in STATES_REDO['set'] + STATES_REDO['unset']:
+        reactive.remove_state(state)
