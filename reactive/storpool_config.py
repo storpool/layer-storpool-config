@@ -128,7 +128,7 @@ def install_package():
     reactive.remove_state('l-storpool-config.package-try-install')
     (err, newly_installed) = sprepo.install_packages({
         'txn-install': '*',
-        'storpool-config': spver,
+        'storpool-config': '*',
     })
     if err is not None:
         rdebug('oof, we could not install packages: {err}'.format(err=err))
